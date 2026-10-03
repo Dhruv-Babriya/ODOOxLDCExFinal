@@ -14,10 +14,27 @@ export async function signInAction(input: LoginInput): Promise<ActionResult<{ us
     const validated = loginSchema.parse(input);
     const supabase = await createClient();
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    let { data, error } = await supabase.auth.signInWithPassword({
       email: validated.email,
       password: validated.password,
     });
+
+    // Seamless auto-confirm fallback if email confirmation is pending in Supabase
+    if (error && error.message?.toLowerCase().includes('email not confirmed')) {
+      try {
+        await (supabase as any).rpc('confirm_user_email', { p_email: validated.email });
+        const retry = await supabase.auth.signInWithPassword({
+          email: validated.email,
+          password: validated.password,
+        });
+        if (!retry.error && retry.data) {
+          data = retry.data;
+          error = null;
+        }
+      } catch (confirmErr) {
+        console.warn('Auto-confirm retry warning:', confirmErr);
+      }
+    }
 
     if (error) {
       let friendlyMessage = error.message;
