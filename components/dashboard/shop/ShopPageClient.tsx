@@ -84,7 +84,7 @@ export function ShopPageClient({
           }`}
         >
           <Sparkles className="h-4 w-4 text-emerald-300" />
-          <span>Member Storefront Preview</span>
+          <span>Pro Shop</span>
         </button>
       </div>
 
@@ -105,7 +105,7 @@ export function ShopPageClient({
             <span className="flex items-center gap-2 font-medium">
               <Store className="h-4 w-4 text-emerald-400 shrink-0" />
               <span>
-                <strong>Storefront Preview:</strong> This interactive catalog demonstrates the member-facing Pro Shop interface with tier discounts, live inventory badges, and express 1-click checkout.
+                <strong>Pro Shop:</strong> This interactive catalog demonstrates the member-facing Pro Shop interface with tier discounts, live inventory badges, and express 1-click checkout.
               </span>
             </span>
           </div>
