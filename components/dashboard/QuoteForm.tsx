@@ -45,6 +45,7 @@ export function QuoteForm({
       membershipPlanId: membershipPlanId || undefined,
       quotedAmount: parseFloat(quotedAmount),
       validUntil,
+      status: 'DRAFT',
     });
 
     setIsSubmitting(false);
@@ -64,7 +65,7 @@ export function QuoteForm({
             <CheckCircle2 className="h-6 w-6" />
           </div>
           <h3 className="text-lg font-bold text-white">Quote Generated!</h3>
-          <p className="text-xs text-zinc-400">The quote has been created and the lead's status has been updated.</p>
+          <p className="text-xs text-zinc-400">The quote has been created and the lead&apos;s status has been updated.</p>
           <Button variant="secondary" size="sm" onClick={onClose}>Close</Button>
         </CardContent>
       </Card>

@@ -131,8 +131,29 @@ export function BookingCalendar({ courts, userRole, userMemberId }: BookingCalen
 
   useEffect(() => {
     if (!selectedCourt) return;
-    refreshAvailability(selectedCourt.id, selectedDate);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let cancelled = false;
+
+    Promise.resolve().then(() => {
+      if (!cancelled) {
+        setLoadingAvailability(true);
+        setError(null);
+        setSelectedSlot(null);
+      }
+    });
+
+    getCourtAvailabilityAction(selectedCourt.id, selectedDate).then((result) => {
+      if (cancelled) return;
+      if (result.success) {
+        setAvailability(result.data);
+      } else {
+        setError(result.error);
+      }
+      setLoadingAvailability(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedCourt?.id, selectedDate]);
 
   // Load members & stats for staff

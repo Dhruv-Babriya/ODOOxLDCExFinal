@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { NotificationBell } from '@/components/dashboard/NotificationBell';
 import { signOutAction } from '@/actions/auth';
 import { ExternalLink, LogOut, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -36,7 +37,9 @@ export function DashboardHeader({
         <Badge variant="success">System Online</Badge>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
+        <NotificationBell />
+
         <Link
           href="/dashboard/profile"
           className="flex items-center gap-2.5 pr-2 border-r border-zinc-800 hover:opacity-80 transition-opacity"
