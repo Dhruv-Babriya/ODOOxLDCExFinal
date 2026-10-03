@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import type { MemberPortalData } from '@/types/shared';
 import { formatDate, formatCurrency, formatTime } from '@/lib/utils';
 import { renewMembershipAction } from '@/actions/members';
+import { MemberProShop } from '@/components/dashboard/shop/MemberProShop';
 import {
   Sparkles,
   Calendar,
@@ -50,6 +51,8 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
     payments,
     history,
     availablePlans = [],
+    products = [],
+    categories = [],
   } = data;
 
   const plan = member.membership_plans;
@@ -221,12 +224,18 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
                 <span>Book Court</span>
               </Button>
             </Link>
-            <Link href="/dashboard/shop">
-              <Button variant="outline" size="sm" className="gap-2 text-xs border-zinc-700">
-                <ShoppingBag className="h-3.5 w-3.5" />
-                <span>Pro Shop</span>
-              </Button>
-            </Link>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 text-xs border-zinc-700 hover:border-emerald-500/50 hover:bg-zinc-800"
+              onClick={() => setActiveTab('commerce')}
+            >
+              <ShoppingBag className="h-3.5 w-3.5 text-emerald-400" />
+              <span>Pro Shop</span>
+              <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-1.5 py-0.5 rounded-full border border-emerald-500/30">
+                {plan?.shop_discount_percent || 15}% OFF
+              </span>
+            </Button>
             <Link href="/dashboard/profile">
               <Button variant="ghost" size="sm" className="gap-2 text-xs text-zinc-400 hover:text-white">
                 <User className="h-3.5 w-3.5" />
@@ -350,22 +359,27 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
         </Card>
 
         {/* Metric 4: Tab Balance / Shop Orders */}
-        <Card className="border-zinc-800 bg-zinc-900/60 p-4 relative overflow-hidden shadow-lg">
+        <Card
+          onClick={() => setActiveTab('commerce')}
+          className="border-zinc-800 bg-zinc-900/60 p-4 relative overflow-hidden shadow-lg cursor-pointer hover:border-emerald-500/40 transition-colors group"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-zinc-400 text-xs font-medium">Cafeteria & Shop</span>
-            <ShoppingBag className="h-4 w-4 text-amber-400" />
+            <span className="text-zinc-400 text-xs font-medium group-hover:text-emerald-400 transition-colors">
+              Pro Shop &amp; Dining
+            </span>
+            <ShoppingBag className="h-4 w-4 text-emerald-400" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-xl font-bold text-white tracking-tight">
-              {customerTabs[0]
-                ? formatCurrency(customerTabs[0].current_balance)
-                : `${shopOrders.length} Orders`}
+              {plan?.shop_discount_percent || 15}% OFF
+            </span>
+            <span className="text-[11px] font-mono text-emerald-400">
+              {shopOrders.length} orders
             </span>
           </div>
-          <p className="text-[10px] text-zinc-500 mt-1 truncate">
-            {customerTabs[0]
-              ? `Active Tab #${customerTabs[0].tab_number}`
-              : 'All tabs settled'}
+          <p className="text-[10px] text-zinc-500 mt-1 truncate flex items-center gap-1 group-hover:text-zinc-300">
+            <span>Browse Member Gear</span>
+            <ArrowRight className="h-3 w-3 inline text-emerald-400" />
           </p>
         </Card>
       </div>
@@ -404,14 +418,17 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
           role="tab"
           aria-selected={activeTab === 'commerce'}
           onClick={() => setActiveTab('commerce')}
-          className={`pb-3 px-3 transition-colors flex items-center gap-2 border-b-2 ${
+          className={`pb-3 px-3 transition-colors flex items-center gap-2 border-b-2 cursor-pointer ${
             activeTab === 'commerce'
               ? 'border-emerald-500 text-emerald-400 font-semibold'
               : 'border-transparent text-zinc-400 hover:text-zinc-200'
           }`}
         >
           <ShoppingBag className="h-4 w-4" />
-          <span>Shop & Cafeteria ({shopOrders.length})</span>
+          <span>Pro Shop &amp; Gear</span>
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+            {plan?.shop_discount_percent || 15}% OFF
+          </span>
         </button>
 
         <button
@@ -610,6 +627,36 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
                   )}
                 </CardContent>
               </Card>
+
+              {/* Pro Shop Member Exclusive Spotlight */}
+              <Card className="border-zinc-800 bg-gradient-to-br from-zinc-900/90 via-zinc-900/60 to-emerald-950/30 overflow-hidden shadow-lg border-emerald-500/20">
+                <CardHeader className="pb-2 border-b border-zinc-800/80">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ShoppingBag className="h-4 w-4 text-emerald-400" />
+                      <CardTitle className="text-sm text-white">Pro Shop Member Deals</CardTitle>
+                    </div>
+                    <Badge variant="gold" className="text-[10px] uppercase font-bold">
+                      {plan?.shop_discount_percent || 15}% OFF
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-3 space-y-3">
+                  <p className="text-xs text-zinc-300 leading-relaxed">
+                    Enjoy your <span className="text-emerald-400 font-semibold">{tier || 'Club'} member discount</span> across tournament rackets, balls, court shoes and club polo wear with fast 30-min reception pickup.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onClick={() => setActiveTab('commerce')}
+                    className="w-full text-xs gap-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 shadow-md shadow-emerald-950/40 font-semibold"
+                  >
+                    <ShoppingBag className="h-3.5 w-3.5" />
+                    <span>Browse &amp; Order Gear ({products.length} Items)</span>
+                    <ArrowRight className="h-3 w-3 ml-auto" />
+                  </Button>
+                </CardContent>
+              </Card>
             </div>
           </div>
         </div>
@@ -769,105 +816,15 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
         </div>
       )}
 
-      {/* Tab 3: Commerce & F&B Orders */}
+      {/* Tab 3: Pro Shop & Gear (Full Member Catalog, Cart & Orders) */}
       {activeTab === 'commerce' && (
-        <div className="space-y-6">
-          <Card className="border-zinc-800 bg-zinc-900/50">
-            <CardHeader className="pb-3 border-b border-zinc-800/80">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <ShoppingBag className="h-4 w-4 text-emerald-400" />
-                  <CardTitle className="text-base text-white">Pro Shop Orders</CardTitle>
-                </div>
-                <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-                  <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800" role="toolbar" aria-label="Filter shop orders">
-                    {(['ALL', 'COMPLETED', 'PENDING'] as const).map((filter) => (
-                      <button
-                        key={filter}
-                        type="button"
-                        onClick={() => setOrderFilter(filter)}
-                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                          orderFilter === filter
-                            ? 'bg-emerald-500/20 text-emerald-300 font-semibold'
-                            : 'text-zinc-400 hover:text-zinc-200'
-                        }`}
-                      >
-                        {filter === 'ALL' ? 'All' : filter === 'COMPLETED' ? 'Completed' : 'Pending'}
-                      </button>
-                    ))}
-                  </div>
-                  <Link href="/dashboard/shop">
-                    <Button size="sm" variant="outline" className="text-xs h-7">
-                      Browse Pro Shop
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-4">
-              {filteredShopOrders.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs text-left">
-                    <thead className="border-b border-zinc-800 text-zinc-400 font-semibold uppercase tracking-wider">
-                      <tr>
-                        <th scope="col" className="py-2.5 px-3">Order Number</th>
-                        <th scope="col" className="py-2.5 px-3">Items Summary</th>
-                        <th scope="col" className="py-2.5 px-3">Date</th>
-                        <th scope="col" className="py-2.5 px-3">Channel</th>
-                        <th scope="col" className="py-2.5 px-3">Status</th>
-                        <th scope="col" className="py-2.5 px-3 text-right">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-800/60 font-sans">
-                      {filteredShopOrders.map((o) => (
-                        <tr key={o.id} className="hover:bg-zinc-800/30">
-                          <td className="py-3 px-3 font-mono font-medium text-emerald-400">
-                            {o.order_number}
-                          </td>
-                          <td className="py-3 px-3 text-zinc-300">
-                            <span>{o.items_summary}</span>
-                          </td>
-                          <td className="py-3 px-3 text-zinc-400">
-                            {formatDate(o.created_at)}
-                          </td>
-                          <td className="py-3 px-3">
-                            <Badge variant="outline" className="text-[10px]">
-                              {o.channel}
-                            </Badge>
-                          </td>
-                          <td className="py-3 px-3">
-                            <Badge
-                              variant={o.status === 'COMPLETED' ? 'success' : 'outline'}
-                              className="text-[10px]"
-                            >
-                              {o.status}
-                            </Badge>
-                          </td>
-                          <td className="py-3 px-3 text-right font-mono font-semibold text-white">
-                            {formatCurrency(o.total_amount)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="text-center py-8 text-zinc-500 text-xs space-y-2">
-                  <p>
-                    {orderFilter === 'ALL'
-                      ? 'You have not placed any pro-shop gear orders yet.'
-                      : `No shop orders found with status "${orderFilter}".`}
-                  </p>
-                  <Link href="/dashboard/shop">
-                    <Button size="sm" variant="outline" className="text-xs">
-                      Shop Rackets & Apparel
-                    </Button>
-                  </Link>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        <MemberProShop
+          products={products}
+          categories={categories}
+          member={member}
+          initialOrders={shopOrders}
+          customerTabs={customerTabs}
+        />
       )}
 
       {/* Tab 4: Billing, Invoices & Payments */}
