@@ -52,8 +52,11 @@ export class BookingConcurrencyError extends ConflictError {
  * Transforms any unknown error into a sanitized, safe ActionResult for server actions
  */
 export function handleActionError(error: unknown): ActionResult<never> {
-  if (typeof error === 'object' && error !== null && 'digest' in error && (error as { digest?: unknown }).digest === 'DYNAMIC_SERVER_USAGE') {
-    throw error;
+  if (typeof error === 'object' && error !== null && 'digest' in error) {
+    const digest = String((error as { digest?: unknown }).digest);
+    if (digest === 'DYNAMIC_SERVER_USAGE' || digest.startsWith('NEXT_REDIRECT')) {
+      throw error;
+    }
   }
 
   // Console log internal error details on the server (never send raw details to client)

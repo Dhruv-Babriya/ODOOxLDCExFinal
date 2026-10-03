@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -84,6 +84,37 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
   const [renewalLoading, setRenewalLoading] = useState(false);
   const [renewalError, setRenewalError] = useState<string | null>(null);
   const [renewalSuccess, setRenewalSuccess] = useState<string | null>(null);
+
+  // Close renewal modal on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isRenewModalOpen) {
+        setIsRenewModalOpen(false);
+      }
+    };
+    if (isRenewModalOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isRenewModalOpen]);
+
+  // Tab filter states
+  const [bookingFilter, setBookingFilter] = useState<'ALL' | 'CONFIRMED' | 'CANCELLED'>('ALL');
+  const [orderFilter, setOrderFilter] = useState<'ALL' | 'COMPLETED' | 'PENDING'>('ALL');
+  const [invoiceFilter, setInvoiceFilter] = useState<'ALL' | 'PAID' | 'ISSUED' | 'OVERDUE'>('ALL');
+
+  const filteredUpcomingBookings = upcomingBookings.filter(
+    (b) => bookingFilter === 'ALL' || b.status === bookingFilter
+  );
+  const filteredPastBookings = pastBookings.filter(
+    (b) => bookingFilter === 'ALL' || b.status === bookingFilter
+  );
+  const filteredShopOrders = shopOrders.filter(
+    (o) => orderFilter === 'ALL' || o.status === orderFilter
+  );
+  const filteredInvoices = invoices.filter(
+    (inv) => invoiceFilter === 'ALL' || inv.status === invoiceFilter
+  );
 
   const handleSelfRenewal = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -259,9 +290,91 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
         </div>
       )}
 
+      {/* 4-Card Quick Metrics Snapshot Bar */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Metric 1: Status & Validity */}
+        <Card className="border-zinc-800 bg-zinc-900/60 p-4 relative overflow-hidden shadow-lg">
+          <div className="flex items-center justify-between">
+            <span className="text-zinc-400 text-xs font-medium">Membership Status</span>
+            <Shield className="h-4 w-4 text-emerald-400" />
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-xl font-bold text-white tracking-tight">
+              {isExpired ? 'Expired' : isExpiringSoon ? 'Expiring' : 'Active'}
+            </span>
+            <span className="text-[11px] font-mono text-zinc-400">
+              ({member.days_remaining}d left)
+            </span>
+          </div>
+          <p className="text-[10px] text-zinc-500 mt-1 truncate">
+            Valid until {formatDate(member.end_date)}
+          </p>
+        </Card>
+
+        {/* Metric 2: Court Privileges */}
+        <Card className="border-zinc-800 bg-zinc-900/60 p-4 relative overflow-hidden shadow-lg">
+          <div className="flex items-center justify-between">
+            <span className="text-zinc-400 text-xs font-medium">Court Benefits</span>
+            <Activity className="h-4 w-4 text-sky-400" />
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-xl font-bold text-white tracking-tight">
+              {plan?.court_discount_percent || 0}% OFF
+            </span>
+            <span className="text-[11px] text-emerald-400 font-medium">
+              +{plan?.free_court_hours_per_day || 0}h free/day
+            </span>
+          </div>
+          <p className="text-[10px] text-zinc-500 mt-1 truncate">
+            Max {plan?.max_daily_bookings || 1} daily booking(s)
+          </p>
+        </Card>
+
+        {/* Metric 3: Upcoming Bookings */}
+        <Card className="border-zinc-800 bg-zinc-900/60 p-4 relative overflow-hidden shadow-lg">
+          <div className="flex items-center justify-between">
+            <span className="text-zinc-400 text-xs font-medium">Upcoming Sessions</span>
+            <Calendar className="h-4 w-4 text-emerald-400" />
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-xl font-bold text-white tracking-tight">
+              {upcomingBookings.length}
+            </span>
+            <span className="text-[11px] text-zinc-400">reserved</span>
+          </div>
+          <p className="text-[10px] text-zinc-500 mt-1 truncate">
+            {upcomingBookings.length > 0
+              ? `Next: ${upcomingBookings[0].court_name}`
+              : 'No upcoming reservations'}
+          </p>
+        </Card>
+
+        {/* Metric 4: Tab Balance / Shop Orders */}
+        <Card className="border-zinc-800 bg-zinc-900/60 p-4 relative overflow-hidden shadow-lg">
+          <div className="flex items-center justify-between">
+            <span className="text-zinc-400 text-xs font-medium">Cafeteria & Shop</span>
+            <ShoppingBag className="h-4 w-4 text-amber-400" />
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-xl font-bold text-white tracking-tight">
+              {customerTabs[0]
+                ? formatCurrency(customerTabs[0].current_balance)
+                : `${shopOrders.length} Orders`}
+            </span>
+          </div>
+          <p className="text-[10px] text-zinc-500 mt-1 truncate">
+            {customerTabs[0]
+              ? `Active Tab #${customerTabs[0].tab_number}`
+              : 'All tabs settled'}
+          </p>
+        </Card>
+      </div>
+
       {/* Tab Navigation */}
-      <div className="flex border-b border-zinc-800 gap-2 overflow-x-auto text-xs font-medium">
+      <div className="flex border-b border-zinc-800 gap-2 overflow-x-auto text-xs font-medium" role="tablist" aria-label="Member portal views">
         <button
+          role="tab"
+          aria-selected={activeTab === 'overview'}
           onClick={() => setActiveTab('overview')}
           className={`pb-3 px-3 transition-colors flex items-center gap-2 border-b-2 ${
             activeTab === 'overview'
@@ -274,6 +387,8 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
         </button>
 
         <button
+          role="tab"
+          aria-selected={activeTab === 'bookings'}
           onClick={() => setActiveTab('bookings')}
           className={`pb-3 px-3 transition-colors flex items-center gap-2 border-b-2 ${
             activeTab === 'bookings'
@@ -286,6 +401,8 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
         </button>
 
         <button
+          role="tab"
+          aria-selected={activeTab === 'commerce'}
           onClick={() => setActiveTab('commerce')}
           className={`pb-3 px-3 transition-colors flex items-center gap-2 border-b-2 ${
             activeTab === 'commerce'
@@ -298,6 +415,8 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
         </button>
 
         <button
+          role="tab"
+          aria-selected={activeTab === 'billing'}
           onClick={() => setActiveTab('billing')}
           className={`pb-3 px-3 transition-colors flex items-center gap-2 border-b-2 ${
             activeTab === 'billing'
@@ -310,6 +429,8 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
         </button>
 
         <button
+          role="tab"
+          aria-selected={activeTab === 'history'}
           onClick={() => setActiveTab('history')}
           className={`pb-3 px-3 transition-colors flex items-center gap-2 border-b-2 ${
             activeTab === 'history'
@@ -500,35 +621,53 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
           {/* Upcoming */}
           <Card className="border-zinc-800 bg-zinc-900/50">
             <CardHeader className="pb-3 border-b border-zinc-800/80">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-emerald-400" />
                   <CardTitle className="text-base text-white">Upcoming Court Reservations</CardTitle>
                 </div>
-                <Link href="/dashboard/bookings">
-                  <Button size="sm" variant="primary" className="text-xs h-7 gap-1">
-                    <span>New Booking</span>
-                    <ArrowRight className="h-3 w-3" />
-                  </Button>
-                </Link>
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                  <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800" role="toolbar" aria-label="Filter upcoming bookings">
+                    {(['ALL', 'CONFIRMED', 'CANCELLED'] as const).map((filter) => (
+                      <button
+                        key={filter}
+                        type="button"
+                        onClick={() => setBookingFilter(filter)}
+                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                          bookingFilter === filter
+                            ? 'bg-emerald-500/20 text-emerald-300 font-semibold'
+                            : 'text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        {filter === 'ALL' ? 'All' : filter === 'CONFIRMED' ? 'Confirmed' : 'Cancelled'}
+                      </button>
+                    ))}
+                  </div>
+                  <Link href="/dashboard/bookings">
+                    <Button size="sm" variant="primary" className="text-xs h-7 gap-1">
+                      <span>New Booking</span>
+                      <ArrowRight className="h-3 w-3" />
+                    </Button>
+                  </Link>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="pt-4">
-              {upcomingBookings.length > 0 ? (
+              {filteredUpcomingBookings.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs text-left">
                     <thead className="border-b border-zinc-800 text-zinc-400 font-semibold uppercase tracking-wider">
                       <tr>
-                        <th className="py-2.5 px-3">Court</th>
-                        <th className="py-2.5 px-3">Date & Time</th>
-                        <th className="py-2.5 px-3">Type</th>
-                        <th className="py-2.5 px-3">Status</th>
-                        <th className="py-2.5 px-3 text-right">Fee</th>
-                        <th className="py-2.5 px-3 text-right">Action</th>
+                        <th scope="col" className="py-2.5 px-3">Court</th>
+                        <th scope="col" className="py-2.5 px-3">Date & Time</th>
+                        <th scope="col" className="py-2.5 px-3">Type</th>
+                        <th scope="col" className="py-2.5 px-3">Status</th>
+                        <th scope="col" className="py-2.5 px-3 text-right">Fee</th>
+                        <th scope="col" className="py-2.5 px-3 text-right">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800/60 font-sans">
-                      {upcomingBookings.map((b) => (
+                      {filteredUpcomingBookings.map((b) => (
                         <tr key={b.id} className="hover:bg-zinc-800/30">
                           <td className="py-3 px-3">
                             <span className="font-semibold text-white block">{b.court_name}</span>
@@ -570,7 +709,11 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
                 </div>
               ) : (
                 <div className="text-center py-8 text-zinc-500 text-xs space-y-2">
-                  <p>You have no upcoming reservations scheduled.</p>
+                  <p>
+                    {bookingFilter === 'ALL'
+                      ? 'You have no upcoming reservations scheduled.'
+                      : `No upcoming reservations found with status "${bookingFilter}".`}
+                  </p>
                   <Link href="/dashboard/bookings">
                     <Button size="sm" variant="outline" className="text-xs">
                       Reserve a Court
@@ -587,19 +730,19 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
               <CardTitle className="text-sm text-zinc-400">Past Bookings Archive</CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
-              {pastBookings.length > 0 ? (
+              {filteredPastBookings.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs text-left">
                     <thead className="border-b border-zinc-800 text-zinc-400 font-semibold uppercase tracking-wider">
                       <tr>
-                        <th className="py-2 px-3">Court</th>
-                        <th className="py-2 px-3">Session Date</th>
-                        <th className="py-2 px-3">Status</th>
-                        <th className="py-2 px-3 text-right">Fee</th>
+                        <th scope="col" className="py-2 px-3">Court</th>
+                        <th scope="col" className="py-2 px-3">Session Date</th>
+                        <th scope="col" className="py-2 px-3">Status</th>
+                        <th scope="col" className="py-2 px-3 text-right">Fee</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800/60 font-sans">
-                      {pastBookings.map((b) => (
+                      {filteredPastBookings.map((b) => (
                         <tr key={b.id} className="hover:bg-zinc-800/30 text-zinc-400">
                           <td className="py-2.5 px-3 font-medium text-zinc-300">{b.court_name}</td>
                           <td className="py-2.5 px-3">{formatDate(b.start_time)}</td>
@@ -618,7 +761,7 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
                 </div>
               ) : (
                 <div className="text-center py-4 text-zinc-500 text-xs">
-                  No past sessions recorded.
+                  {bookingFilter === 'ALL' ? 'No past sessions recorded.' : `No past sessions with status "${bookingFilter}".`}
                 </div>
               )}
             </CardContent>
@@ -631,34 +774,52 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
         <div className="space-y-6">
           <Card className="border-zinc-800 bg-zinc-900/50">
             <CardHeader className="pb-3 border-b border-zinc-800/80">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div className="flex items-center gap-2">
                   <ShoppingBag className="h-4 w-4 text-emerald-400" />
                   <CardTitle className="text-base text-white">Pro Shop Orders</CardTitle>
                 </div>
-                <Link href="/dashboard/shop">
-                  <Button size="sm" variant="outline" className="text-xs h-7">
-                    Browse Pro Shop
-                  </Button>
-                </Link>
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                  <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800" role="toolbar" aria-label="Filter shop orders">
+                    {(['ALL', 'COMPLETED', 'PENDING'] as const).map((filter) => (
+                      <button
+                        key={filter}
+                        type="button"
+                        onClick={() => setOrderFilter(filter)}
+                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                          orderFilter === filter
+                            ? 'bg-emerald-500/20 text-emerald-300 font-semibold'
+                            : 'text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        {filter === 'ALL' ? 'All' : filter === 'COMPLETED' ? 'Completed' : 'Pending'}
+                      </button>
+                    ))}
+                  </div>
+                  <Link href="/dashboard/shop">
+                    <Button size="sm" variant="outline" className="text-xs h-7">
+                      Browse Pro Shop
+                    </Button>
+                  </Link>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="pt-4">
-              {shopOrders.length > 0 ? (
+              {filteredShopOrders.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs text-left">
                     <thead className="border-b border-zinc-800 text-zinc-400 font-semibold uppercase tracking-wider">
                       <tr>
-                        <th className="py-2.5 px-3">Order Number</th>
-                        <th className="py-2.5 px-3">Items Summary</th>
-                        <th className="py-2.5 px-3">Date</th>
-                        <th className="py-2.5 px-3">Channel</th>
-                        <th className="py-2.5 px-3">Status</th>
-                        <th className="py-2.5 px-3 text-right">Total</th>
+                        <th scope="col" className="py-2.5 px-3">Order Number</th>
+                        <th scope="col" className="py-2.5 px-3">Items Summary</th>
+                        <th scope="col" className="py-2.5 px-3">Date</th>
+                        <th scope="col" className="py-2.5 px-3">Channel</th>
+                        <th scope="col" className="py-2.5 px-3">Status</th>
+                        <th scope="col" className="py-2.5 px-3 text-right">Total</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800/60 font-sans">
-                      {shopOrders.map((o) => (
+                      {filteredShopOrders.map((o) => (
                         <tr key={o.id} className="hover:bg-zinc-800/30">
                           <td className="py-3 px-3 font-mono font-medium text-emerald-400">
                             {o.order_number}
@@ -692,7 +853,11 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
                 </div>
               ) : (
                 <div className="text-center py-8 text-zinc-500 text-xs space-y-2">
-                  <p>You have not placed any pro-shop gear orders yet.</p>
+                  <p>
+                    {orderFilter === 'ALL'
+                      ? 'You have not placed any pro-shop gear orders yet.'
+                      : `No shop orders found with status "${orderFilter}".`}
+                  </p>
                   <Link href="/dashboard/shop">
                     <Button size="sm" variant="outline" className="text-xs">
                       Shop Rackets & Apparel
@@ -710,26 +875,44 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
         <div className="space-y-6">
           <Card className="border-zinc-800 bg-zinc-900/50">
             <CardHeader className="pb-3 border-b border-zinc-800/80">
-              <div className="flex items-center gap-2">
-                <Receipt className="h-4 w-4 text-emerald-400" />
-                <CardTitle className="text-base text-white">Invoices & Statements</CardTitle>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Receipt className="h-4 w-4 text-emerald-400" />
+                  <CardTitle className="text-base text-white">Invoices & Statements</CardTitle>
+                </div>
+                <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800" role="toolbar" aria-label="Filter invoices">
+                  {(['ALL', 'PAID', 'ISSUED', 'OVERDUE'] as const).map((filter) => (
+                    <button
+                      key={filter}
+                      type="button"
+                      onClick={() => setInvoiceFilter(filter)}
+                      className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                        invoiceFilter === filter
+                          ? 'bg-emerald-500/20 text-emerald-300 font-semibold'
+                          : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      {filter === 'ALL' ? 'All' : filter === 'PAID' ? 'Paid' : filter === 'ISSUED' ? 'Issued' : 'Overdue'}
+                    </button>
+                  ))}
+                </div>
               </div>
             </CardHeader>
             <CardContent className="pt-4">
-              {invoices.length > 0 ? (
+              {filteredInvoices.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs text-left">
                     <thead className="border-b border-zinc-800 text-zinc-400 font-semibold uppercase tracking-wider">
                       <tr>
-                        <th className="py-2.5 px-3">Invoice #</th>
-                        <th className="py-2.5 px-3">Issue Date</th>
-                        <th className="py-2.5 px-3">Due Date</th>
-                        <th className="py-2.5 px-3">Status</th>
-                        <th className="py-2.5 px-3 text-right">Amount</th>
+                        <th scope="col" className="py-2.5 px-3">Invoice #</th>
+                        <th scope="col" className="py-2.5 px-3">Issue Date</th>
+                        <th scope="col" className="py-2.5 px-3">Due Date</th>
+                        <th scope="col" className="py-2.5 px-3">Status</th>
+                        <th scope="col" className="py-2.5 px-3 text-right">Amount</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800/60 font-sans">
-                      {invoices.map((inv) => (
+                      {filteredInvoices.map((inv) => (
                         <tr key={inv.id} className="hover:bg-zinc-800/30">
                           <td className="py-3 px-3 font-mono font-semibold text-purple-400">
                             {inv.invoice_number}
@@ -754,7 +937,7 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
                 </div>
               ) : (
                 <div className="text-center py-6 text-zinc-500 text-xs">
-                  No invoices issued.
+                  {invoiceFilter === 'ALL' ? 'No invoices issued.' : `No invoices found with status "${invoiceFilter}".`}
                 </div>
               )}
             </CardContent>
@@ -773,11 +956,11 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
                   <table className="w-full text-xs text-left">
                     <thead className="border-b border-zinc-800 text-zinc-400 font-semibold uppercase tracking-wider">
                       <tr>
-                        <th className="py-2.5 px-3">Receipt #</th>
-                        <th className="py-2.5 px-3">Payment Date</th>
-                        <th className="py-2.5 px-3">Method</th>
-                        <th className="py-2.5 px-3">Status</th>
-                        <th className="py-2.5 px-3 text-right">Amount Paid</th>
+                        <th scope="col" className="py-2.5 px-3">Receipt #</th>
+                        <th scope="col" className="py-2.5 px-3">Payment Date</th>
+                        <th scope="col" className="py-2.5 px-3">Method</th>
+                        <th scope="col" className="py-2.5 px-3">Status</th>
+                        <th scope="col" className="py-2.5 px-3 text-right">Amount Paid</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800/60 font-sans">
@@ -831,11 +1014,11 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
                 <table className="w-full text-xs text-left">
                   <thead className="border-b border-zinc-800 text-zinc-400 font-semibold uppercase tracking-wider">
                     <tr>
-                      <th className="py-2.5 px-3">Date</th>
-                      <th className="py-2.5 px-3">Plan Enrolled</th>
-                      <th className="py-2.5 px-3">Validity Window</th>
-                      <th className="py-2.5 px-3">Status</th>
-                      <th className="py-2.5 px-3">Remarks / Reason</th>
+                      <th scope="col" className="py-2.5 px-3">Date</th>
+                      <th scope="col" className="py-2.5 px-3">Plan Enrolled</th>
+                      <th scope="col" className="py-2.5 px-3">Validity Window</th>
+                      <th scope="col" className="py-2.5 px-3">Status</th>
+                      <th scope="col" className="py-2.5 px-3">Remarks / Reason</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-800/60 font-sans">
@@ -872,7 +1055,12 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
 
       {/* Self-Service Renewal Modal */}
       {isRenewModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="renewal-modal-title"
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+        >
           <div className="max-w-lg w-full bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden my-8">
             <div className="flex items-center justify-between p-5 border-b border-zinc-800">
               <div className="flex items-center gap-2.5">
@@ -880,12 +1068,13 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
                   <RefreshCw className="h-4 w-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Renew / Upgrade Membership</h3>
+                  <h3 id="renewal-modal-title" className="text-sm font-bold text-white">Renew / Upgrade Membership</h3>
                   <p className="text-xs text-zinc-400">Member #{member.membership_number}</p>
                 </div>
               </div>
               <button
                 type="button"
+                aria-label="Close renewal modal"
                 onClick={() => setIsRenewModalOpen(false)}
                 className="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition-colors"
               >
@@ -895,14 +1084,14 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
 
             <form onSubmit={handleSelfRenewal} className="p-5 space-y-4">
               {renewalError && (
-                <div className="p-3 rounded-lg bg-rose-950/40 border border-rose-800 text-rose-300 text-xs flex items-center gap-2">
+                <div role="alert" className="p-3 rounded-lg bg-rose-950/40 border border-rose-800 text-rose-300 text-xs flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
                   <span>{renewalError}</span>
                 </div>
               )}
 
               {renewalSuccess && (
-                <div className="p-3 rounded-lg bg-emerald-950/40 border border-emerald-800 text-emerald-300 text-xs flex items-center gap-2 animate-pulse">
+                <div role="status" className="p-3 rounded-lg bg-emerald-950/40 border border-emerald-800 text-emerald-300 text-xs flex items-center gap-2 animate-pulse">
                   <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
                   <span>{renewalSuccess}</span>
                 </div>
@@ -910,8 +1099,9 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
 
               {/* Plan Selection */}
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-zinc-300">Select Membership Plan</label>
+                <label htmlFor="renewal-plan-select" className="text-xs font-medium text-zinc-300">Select Membership Plan</label>
                 <select
+                  id="renewal-plan-select"
                   value={renewalPlanId}
                   onChange={(e) => setRenewalPlanId(e.target.value)}
                   className="w-full text-xs bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-emerald-500"
@@ -1012,10 +1202,11 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
 
               {/* Optional Reference */}
               <div className="space-y-1">
-                <label className="text-xs font-medium text-zinc-300">
+                <label htmlFor="renewal-payment-ref" className="text-xs font-medium text-zinc-300">
                   Payment Reference <span className="text-zinc-500">(Optional)</span>
                 </label>
                 <Input
+                  id="renewal-payment-ref"
                   placeholder="e.g. Transaction ID / Card Auth"
                   value={renewalPaymentRef}
                   onChange={(e) => setRenewalPaymentRef(e.target.value)}
@@ -1025,10 +1216,11 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
 
               {/* Optional Notes */}
               <div className="space-y-1">
-                <label className="text-xs font-medium text-zinc-300">
+                <label htmlFor="renewal-notes" className="text-xs font-medium text-zinc-300">
                   Notes / Requests <span className="text-zinc-500">(Optional)</span>
                 </label>
                 <Input
+                  id="renewal-notes"
                   placeholder="e.g. Requested plan tier upgrade"
                   value={renewalNotes}
                   onChange={(e) => setRenewalNotes(e.target.value)}

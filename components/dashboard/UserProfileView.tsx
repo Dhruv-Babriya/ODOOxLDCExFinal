@@ -88,32 +88,56 @@ export function UserProfileView({ initialData }: { initialData: UserProfileWithM
             <CardContent>
               <form onSubmit={handleUpdate} className="space-y-4">
                 {successMsg && (
-                  <div className="p-3 rounded-lg bg-emerald-950/60 border border-emerald-800/80 text-xs text-emerald-300 flex items-center gap-2">
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    className="p-3 rounded-lg bg-emerald-950/60 border border-emerald-800/80 text-xs text-emerald-300 flex items-center gap-2"
+                  >
                     <CheckCircle2 className="h-4 w-4 shrink-0" />
                     <span>{successMsg}</span>
                   </div>
                 )}
 
                 {errorMsg && (
-                  <div className="p-3 rounded-lg bg-rose-950/60 border border-rose-800/80 text-xs text-rose-300 flex items-center gap-2">
+                  <div
+                    role="alert"
+                    aria-live="polite"
+                    className="p-3 rounded-lg bg-rose-950/60 border border-rose-800/80 text-xs text-rose-300 flex items-center gap-2"
+                  >
                     <AlertCircle className="h-4 w-4 shrink-0" />
                     <span>{errorMsg}</span>
                   </div>
                 )}
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-zinc-300">Email Address (Read-only)</label>
+                  <label htmlFor="profile-email" className="text-xs font-medium text-zinc-300">
+                    Email Address (Read-only)
+                  </label>
                   <div className="relative">
-                    <Input disabled value={initialData.email} className="bg-zinc-950/40 text-zinc-400 pl-9" />
+                    <Input
+                      id="profile-email"
+                      name="email"
+                      disabled
+                      value={initialData.email}
+                      className="bg-zinc-950/40 text-zinc-400 pl-9"
+                    />
                     <Mail className="absolute left-3 top-3 h-4 w-4 text-zinc-500" />
                   </div>
+                  <p className="text-[10px] text-zinc-500">
+                    Primary login identity. Contact administration to modify email.
+                  </p>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-zinc-300">Full Name *</label>
+                  <label htmlFor="profile-fullname" className="text-xs font-medium text-zinc-300">
+                    Full Name <span className="text-rose-400">*</span>
+                  </label>
                   <div className="relative">
                     <Input
+                      id="profile-fullname"
+                      name="fullName"
                       required
+                      autoComplete="name"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       className="pl-9"
@@ -123,9 +147,15 @@ export function UserProfileView({ initialData }: { initialData: UserProfileWithM
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-zinc-300">Phone Number</label>
+                  <label htmlFor="profile-phone" className="text-xs font-medium text-zinc-300">
+                    Phone Number
+                  </label>
                   <div className="relative">
                     <Input
+                      id="profile-phone"
+                      name="phone"
+                      type="tel"
+                      autoComplete="tel"
                       placeholder="+91 98765 43210"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
@@ -161,17 +191,19 @@ export function UserProfileView({ initialData }: { initialData: UserProfileWithM
                       {member.membership_plans?.name || 'Club Member'}
                     </CardTitle>
                   </div>
-                  <Badge
-                    variant={
-                      member.membership_plans?.tier === 'GOLD'
-                        ? 'gold'
-                        : member.membership_plans?.tier === 'SILVER'
-                        ? 'silver'
-                        : 'outline'
-                    }
-                  >
-                    {member.membership_plans?.tier} TIER
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant={
+                        member.membership_plans?.tier === 'GOLD'
+                          ? 'gold'
+                          : member.membership_plans?.tier === 'SILVER'
+                          ? 'silver'
+                          : 'outline'
+                      }
+                    >
+                      {member.membership_plans?.tier} TIER
+                    </Badge>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="pt-4 space-y-4">

@@ -59,7 +59,7 @@ export function NotificationBell() {
     };
   }, []);
 
-  // Close dropdown on click outside
+  // Close dropdown on click outside or Escape key
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -67,10 +67,20 @@ export function NotificationBell() {
       }
     };
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isOpen) {
+        setIsOpen(false);
+      }
+    };
+
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
     }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, [isOpen]);
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
@@ -114,12 +124,15 @@ export function NotificationBell() {
   return (
     <div className="relative" ref={dropdownRef}>
       <button
+        type="button"
         onClick={() => {
           setIsOpen(!isOpen);
           if (!isOpen) fetchNotifications();
         }}
-        className="relative p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors focus:outline-none focus:ring-1 focus:ring-emerald-500"
-        aria-label="View notifications"
+        className="relative p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+        aria-label={`View notifications, ${unreadCount} unread`}
+        aria-expanded={isOpen}
+        aria-haspopup="dialog"
       >
         <Bell className="h-4 w-4" />
         {unreadCount > 0 && (
@@ -130,7 +143,11 @@ export function NotificationBell() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-xl border border-zinc-800 bg-zinc-950/95 backdrop-blur-md shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+        <div
+          role="dialog"
+          aria-label="Notifications Dropdown"
+          className="absolute right-0 mt-2 w-80 sm:w-96 rounded-xl border border-zinc-800 bg-zinc-950/95 backdrop-blur-md shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150"
+        >
           <div className="p-3.5 border-b border-zinc-800/80 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-white">Notifications</span>
@@ -209,6 +226,16 @@ export function NotificationBell() {
                 <p className="text-[10px] text-zinc-600">You are all caught up!</p>
               </div>
             )}
+          </div>
+
+          <div className="p-2.5 border-t border-zinc-800/80 bg-zinc-950/60 text-center">
+            <Link
+              href="/dashboard/notifications"
+              onClick={() => setIsOpen(false)}
+              className="text-[11px] text-emerald-400 hover:text-emerald-300 font-medium transition-colors inline-block"
+            >
+              View Full Notifications Hub &rarr;
+            </Link>
           </div>
         </div>
       )}

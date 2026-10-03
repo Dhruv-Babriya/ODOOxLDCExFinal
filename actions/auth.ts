@@ -20,9 +20,19 @@ export async function signInAction(input: LoginInput): Promise<ActionResult<{ us
     });
 
     if (error) {
+      let friendlyMessage = error.message;
+      const lower = error.message?.toLowerCase() || '';
+      if (lower.includes('invalid login credentials')) {
+        friendlyMessage = 'Invalid email or password. Please check your credentials and try again.';
+      } else if (lower.includes('email not confirmed')) {
+        friendlyMessage = 'Your account email has not been confirmed yet. Please verify your email or contact administration.';
+      } else if (lower.includes('rate limit') || lower.includes('too many requests')) {
+        friendlyMessage = 'Too many sign-in attempts. Please wait a few moments before trying again.';
+      }
+
       return {
         success: false,
-        error: error.message,
+        error: friendlyMessage,
         code: 'AUTH_FAILED',
       };
     }
@@ -89,7 +99,11 @@ export async function signUpAction(input: RegisterInput): Promise<ActionResult<{
 
       if (isRateLimit) {
         // Cast RPC function name until types are regenerated
-        const { data: directUserId, error: directError } = await (supabase.rpc as any)('register_member_direct', {
+        const rpcClient = supabase.rpc as unknown as (
+          fn: string,
+          args: Record<string, unknown>
+        ) => Promise<{ data: string | null; error: { message: string } | null }>;
+        const { data: directUserId, error: directError } = await rpcClient('register_member_direct', {
           p_email: validated.email,
           p_password: validated.password,
           p_full_name: validated.fullName,

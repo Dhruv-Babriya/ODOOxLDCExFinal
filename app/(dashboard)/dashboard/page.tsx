@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { getCurrentUser } from '@/lib/auth/session';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -56,7 +58,11 @@ const MODULE_OVERVIEWS = [
   },
 ];
 
-export default function DashboardOverviewPage() {
+export default async function DashboardOverviewPage() {
+  const user = await getCurrentUser();
+  if (user?.role === 'MEMBER') {
+    redirect('/dashboard/portal');
+  }
   return (
     <div className="space-y-8">
       {/* Welcome Banner */}

@@ -67,13 +67,15 @@ export const getCurrentUser = cache(async (): Promise<UserProfile | null> => {
   };
 });
 
+import { AppError } from '@/lib/errors';
+
 /**
  * Enforces authentication. Throws if unauthenticated.
  */
 export async function requireAuth(): Promise<UserProfile> {
   const user = await getCurrentUser();
   if (!user) {
-    throw new Error('Authentication required. Please log in.');
+    throw new AppError('Authentication required. Please sign in to continue.', 'UNAUTHORIZED');
   }
   return user;
 }
@@ -84,7 +86,7 @@ export async function requireAuth(): Promise<UserProfile> {
 export async function requireRole(allowedRoles: AppRole[]): Promise<UserProfile> {
   const user = await requireAuth();
   if (!allowedRoles.includes(user.role)) {
-    throw new Error(`Unauthorized. Required role: [${allowedRoles.join(', ')}], current role: ${user.role}`);
+    throw new AppError(`Access restricted. Required role: [${allowedRoles.join(', ')}]`, 'FORBIDDEN');
   }
   return user;
 }
@@ -95,7 +97,7 @@ export async function requireRole(allowedRoles: AppRole[]): Promise<UserProfile>
 export async function requirePermission(permission: Permission): Promise<UserProfile> {
   const user = await requireAuth();
   if (!hasPermission(user.role, permission)) {
-    throw new Error(`Unauthorized. Missing required permission: ${permission}`);
+    throw new AppError(`Access restricted. Missing required permission: ${permission}`, 'FORBIDDEN');
   }
   return user;
 }

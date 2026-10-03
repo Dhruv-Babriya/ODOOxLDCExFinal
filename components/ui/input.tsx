@@ -16,10 +16,15 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             error && 'border-rose-500 focus-visible:ring-rose-500',
             className
           )}
+          aria-invalid={!!error}
           ref={ref}
           {...props}
         />
-        {error && <p className="mt-1 text-xs text-rose-400">{error}</p>}
+        {error && (
+          <p role="alert" className="mt-1 text-xs text-rose-400">
+            {error}
+          </p>
+        )}
       </div>
     );
   }
