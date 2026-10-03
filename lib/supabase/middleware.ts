@@ -43,6 +43,10 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  if (user) {
+    supabaseResponse.headers.set('x-user-id', user.id);
+  }
+
   // Route protection for dashboard:
   const isDashboardRoute = request.nextUrl.pathname.startsWith('/dashboard');
   if (isDashboardRoute && !user) {
