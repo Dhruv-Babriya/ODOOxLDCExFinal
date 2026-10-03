@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import {
   barTableSchema,
   barTableStatusUpdateSchema,
@@ -564,10 +565,15 @@ export async function createBarOrderAction(
 
     // 6. Update table status to OCCUPIED if placed on table or linked via tab
     if (effectiveTableId) {
-      await supabase
-        .from('bar_tables')
-        .update({ status: 'OCCUPIED' })
-        .eq('id', effectiveTableId);
+      try {
+        const adminDb = createAdminClient();
+        await adminDb
+          .from('bar_tables')
+          .update({ status: 'OCCUPIED' })
+          .eq('id', effectiveTableId);
+      } catch (tableErr) {
+        console.warn('Could not update table status to OCCUPIED:', tableErr);
+      }
     }
 
     revalidatePath('/dashboard/bar');

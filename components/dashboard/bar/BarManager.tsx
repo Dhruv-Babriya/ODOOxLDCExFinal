@@ -34,6 +34,7 @@ import {
   Layers,
   AlertTriangle,
 } from 'lucide-react';
+import { MemberBarOrderingView } from './MemberBarOrderingView';
 
 export interface BarTable {
   id: string;
@@ -127,6 +128,16 @@ export interface BarManagerProps {
   tabs: CustomerTab[];
   orders: BarOrder[];
   members: Member[];
+  currentUser?: {
+    id: string;
+    email: string;
+    fullName: string;
+    role: string;
+    memberId?: string | null;
+  } | null;
+  currentMember?: Member | null;
+  currentMemberTab?: CustomerTab | null;
+  memberOrders?: BarOrder[];
 }
 
 export function BarManager({
@@ -136,6 +147,10 @@ export function BarManager({
   tabs: initialTabs,
   orders: initialOrders,
   members,
+  currentUser,
+  currentMember,
+  currentMemberTab,
+  memberOrders,
 }: BarManagerProps) {
   const [tables, setTables] = useState<BarTable[]>(initialTables);
   const [categories, setCategories] = useState<MenuCategory[]>(initialCategories);
@@ -143,8 +158,27 @@ export function BarManager({
   const [tabs, setTabs] = useState<CustomerTab[]>(initialTabs);
   const [orders, setOrders] = useState<BarOrder[]>(initialOrders);
 
-  // Active top navigation tab
-  const [activeView, setActiveView] = useState<'FLOOR' | 'POS' | 'KDS' | 'MENU'>('FLOOR');
+  // If viewing as a club member, directly display the member-tailored ordering & cafe lounge experience
+  if (currentUser?.role === 'MEMBER') {
+    return (
+      <MemberBarOrderingView
+        tables={tables}
+        categories={categories}
+        menuItems={menuItems}
+        currentMember={currentMember}
+        currentMemberTab={currentMemberTab}
+        memberOrders={
+          memberOrders && memberOrders.length > 0
+            ? memberOrders
+            : orders.filter((o) => o.member_id === currentMember?.id)
+        }
+        isStaffMode={false}
+      />
+    );
+  }
+
+  // Active top navigation tab for staff / manager / owner
+  const [activeView, setActiveView] = useState<'LOUNGE' | 'FLOOR' | 'POS' | 'KDS' | 'MENU'>('LOUNGE');
 
   // Modals state
   const [isAddTableOpen, setIsAddTableOpen] = useState(false);
@@ -710,10 +744,23 @@ export function BarManager({
       </div>
 
       {/* View Switcher Tabs */}
-      <div className="flex border-b border-zinc-800 gap-6 text-xs font-semibold">
+      <div className="flex border-b border-zinc-800 gap-6 text-xs font-semibold overflow-x-auto">
+        <button
+          onClick={() => setActiveView('LOUNGE')}
+          className={`pb-3 transition-colors relative flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+            activeView === 'LOUNGE' ? 'text-amber-400 font-bold' : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          <Coffee className="h-4 w-4" />
+          <span>Cafe Lounge & Ordering</span>
+          {activeView === 'LOUNGE' && (
+            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-400" />
+          )}
+        </button>
+
         <button
           onClick={() => setActiveView('FLOOR')}
-          className={`pb-3 transition-colors relative flex items-center gap-1.5 cursor-pointer ${
+          className={`pb-3 transition-colors relative flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
             activeView === 'FLOOR' ? 'text-amber-400' : 'text-zinc-400 hover:text-zinc-200'
           }`}
         >
@@ -726,7 +773,7 @@ export function BarManager({
 
         <button
           onClick={() => setActiveView('POS')}
-          className={`pb-3 transition-colors relative flex items-center gap-1.5 cursor-pointer ${
+          className={`pb-3 transition-colors relative flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
             activeView === 'POS' ? 'text-amber-400' : 'text-zinc-400 hover:text-zinc-200'
           }`}
         >
@@ -739,7 +786,7 @@ export function BarManager({
 
         <button
           onClick={() => setActiveView('KDS')}
-          className={`pb-3 transition-colors relative flex items-center gap-1.5 cursor-pointer ${
+          className={`pb-3 transition-colors relative flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
             activeView === 'KDS' ? 'text-amber-400' : 'text-zinc-400 hover:text-zinc-200'
           }`}
         >
@@ -757,7 +804,7 @@ export function BarManager({
 
         <button
           onClick={() => setActiveView('MENU')}
-          className={`pb-3 transition-colors relative flex items-center gap-1.5 cursor-pointer ${
+          className={`pb-3 transition-colors relative flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
             activeView === 'MENU' ? 'text-amber-400' : 'text-zinc-400 hover:text-zinc-200'
           }`}
         >
@@ -768,6 +815,21 @@ export function BarManager({
           )}
         </button>
       </div>
+
+      {/* VIEW 0: CAFE LOUNGE & DIGITAL ORDERING */}
+      {activeView === 'LOUNGE' && (
+        <MemberBarOrderingView
+          tables={tables}
+          categories={categories}
+          menuItems={menuItems}
+          currentMember={currentMember}
+          currentMemberTab={currentMemberTab}
+          memberOrders={orders}
+          isStaffMode={true}
+          allMembers={members}
+          onSwitchToStaffManagement={() => setActiveView('FLOOR')}
+        />
+      )}
 
       {/* VIEW 1: FLOOR TABLES & OPEN TABS */}
       {activeView === 'FLOOR' && (
