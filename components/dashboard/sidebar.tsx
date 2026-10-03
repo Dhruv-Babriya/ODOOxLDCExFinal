@@ -35,9 +35,7 @@ const SIDEBAR_SECTIONS: { title: string; items: SidebarItem[] }[] = [
     title: 'Core Platform',
     items: [
       { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
-      { href: '/dashboard/portal', label: 'Member Portal', icon: Sparkles },
       { href: '/dashboard/members', label: 'Members', icon: Users },
-      { href: '/dashboard/membership-plans', label: 'Plans & Pricing', icon: Shield },
       { href: '/dashboard/profile', label: 'User Profile', icon: User },
     ],
   },

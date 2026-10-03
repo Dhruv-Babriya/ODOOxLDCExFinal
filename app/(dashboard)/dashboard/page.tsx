@@ -67,7 +67,6 @@ const CLUB_MODULES = [
     description: 'Member directory, account status, Gold & Silver tier plans, renewals, and history.',
     actions: [
       { label: 'Register New Member', href: '/dashboard/members/new' },
-      { label: 'Manage Plans & Tiers', href: '/dashboard/membership-plans' },
     ],
   },
   {
