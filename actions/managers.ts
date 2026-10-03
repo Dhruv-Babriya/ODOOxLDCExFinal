@@ -162,15 +162,7 @@ export async function createManagerAction(
       };
     }
 
-    const rpcClient = supabase.rpc as unknown as (
-      fn: string,
-      args: Record<string, unknown>
-    ) => Promise<{
-      data: Record<string, unknown> | null;
-      error: { message: string; code?: string; details?: string } | null;
-    }>;
-
-    const { data: result, error: rpcError } = await rpcClient('onboard_staff_direct', {
+    const { data: result, error: rpcError } = await (supabase as any).rpc('onboard_staff_direct', {
       p_email: validated.email.trim().toLowerCase(),
       p_password: validated.password,
       p_full_name: validated.fullName.trim(),

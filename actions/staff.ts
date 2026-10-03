@@ -35,12 +35,7 @@ export async function onboardStaffAction(
     const validated = staffOnboardSchema.parse(input);
     const supabase = await createClient();
 
-    const rpcClient = supabase.rpc as unknown as (
-      fn: string,
-      args: Record<string, unknown>
-    ) => Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>;
-
-    const { data: result, error: rpcError } = await rpcClient('onboard_staff_direct', {
+    const { data: result, error: rpcError } = await (supabase as any).rpc('onboard_staff_direct', {
       p_email: validated.email,
       p_password: validated.password,
       p_full_name: validated.fullName,

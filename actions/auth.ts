@@ -98,12 +98,7 @@ export async function signUpAction(input: RegisterInput): Promise<ActionResult<{
         (error as unknown as Record<string, unknown>)?.code === 'over_email_send_rate_limit';
 
       if (isRateLimit) {
-        // Cast RPC function name until types are regenerated
-        const rpcClient = supabase.rpc as unknown as (
-          fn: string,
-          args: Record<string, unknown>
-        ) => Promise<{ data: string | null; error: { message: string } | null }>;
-        const { data: directUserId, error: directError } = await rpcClient('register_member_direct', {
+        const { data: directUserId, error: directError } = await (supabase as any).rpc('register_member_direct', {
           p_email: validated.email,
           p_password: validated.password,
           p_full_name: validated.fullName,
