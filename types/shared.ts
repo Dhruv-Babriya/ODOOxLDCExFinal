@@ -1,0 +1,321 @@
+/**
+ * The Champions Club - Shared Type Definitions & Enums
+ *
+ * All developers must import enums and core contracts from this file to ensure
+ * consistency across frontend, server actions, route handlers, and database queries.
+ */
+
+// ---------------------------------------------------------------------------
+// Core Roles & Auth
+// ---------------------------------------------------------------------------
+export type AppRole =
+  | 'OWNER'
+  | 'ADMIN'
+  | 'FRONT_DESK'
+  | 'SHOP_STAFF'
+  | 'BAR_STAFF'
+  | 'MEMBER';
+
+export const APP_ROLES: readonly AppRole[] = [
+  'OWNER',
+  'ADMIN',
+  'FRONT_DESK',
+  'SHOP_STAFF',
+  'BAR_STAFF',
+  'MEMBER',
+] as const;
+
+// ---------------------------------------------------------------------------
+// Memberships (Developer 1)
+// ---------------------------------------------------------------------------
+export type MembershipTier = 'GOLD' | 'SILVER' | 'JUNIOR';
+
+export const MEMBERSHIP_TIERS: readonly MembershipTier[] = [
+  'GOLD',
+  'SILVER',
+  'JUNIOR',
+] as const;
+
+export type MembershipStatus =
+  | 'ACTIVE'
+  | 'EXPIRED'
+  | 'SUSPENDED'
+  | 'CANCELLED'
+  | 'PENDING';
+
+export const MEMBERSHIP_STATUSES: readonly MembershipStatus[] = [
+  'ACTIVE',
+  'EXPIRED',
+  'SUSPENDED',
+  'CANCELLED',
+  'PENDING',
+] as const;
+
+// ---------------------------------------------------------------------------
+// Courts & Bookings (Developer 2)
+// ---------------------------------------------------------------------------
+export type SportType = 'TENNIS' | 'CRICKET';
+
+export const SPORT_TYPES: readonly SportType[] = [
+  'TENNIS',
+  'CRICKET',
+] as const;
+
+export type BookingStatus =
+  | 'PENDING'
+  | 'CONFIRMED'
+  | 'CANCELLED'
+  | 'COMPLETED'
+  | 'NO_SHOW';
+
+export const BOOKING_STATUSES: readonly BookingStatus[] = [
+  'PENDING',
+  'CONFIRMED',
+  'CANCELLED',
+  'COMPLETED',
+  'NO_SHOW',
+] as const;
+
+export type BookingType =
+  | 'STANDARD'
+  | 'SOCIAL_PLAY'
+  | 'COACHING'
+  | 'MAINTENANCE';
+
+export const BOOKING_TYPES: readonly BookingType[] = [
+  'STANDARD',
+  'SOCIAL_PLAY',
+  'COACHING',
+  'MAINTENANCE',
+] as const;
+
+// ---------------------------------------------------------------------------
+// Shop & Inventory (Developer 3)
+// ---------------------------------------------------------------------------
+export type OrderChannel = 'COUNTER' | 'ONLINE';
+
+export const ORDER_CHANNELS: readonly OrderChannel[] = [
+  'COUNTER',
+  'ONLINE',
+] as const;
+
+export type OrderStatus =
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
+export const ORDER_STATUSES: readonly OrderStatus[] = [
+  'PENDING',
+  'PROCESSING',
+  'COMPLETED',
+  'CANCELLED',
+] as const;
+
+export type InventoryTransactionType =
+  | 'PURCHASE_RECEIPT'
+  | 'SALE_COUNTER'
+  | 'SALE_ONLINE'
+  | 'ADJUSTMENT'
+  | 'RETURN';
+
+export const INVENTORY_TRANSACTION_TYPES: readonly InventoryTransactionType[] = [
+  'PURCHASE_RECEIPT',
+  'SALE_COUNTER',
+  'SALE_ONLINE',
+  'ADJUSTMENT',
+  'RETURN',
+] as const;
+
+// ---------------------------------------------------------------------------
+// Bar & Cafeteria (Developer 3)
+// ---------------------------------------------------------------------------
+export type TableStatus = 'AVAILABLE' | 'OCCUPIED' | 'RESERVED';
+
+export const TABLE_STATUSES: readonly TableStatus[] = [
+  'AVAILABLE',
+  'OCCUPIED',
+  'RESERVED',
+] as const;
+
+export type KitchenStatus =
+  | 'PENDING'
+  | 'PREPARING'
+  | 'READY'
+  | 'SERVED'
+  | 'CANCELLED';
+
+export const KITCHEN_STATUSES: readonly KitchenStatus[] = [
+  'PENDING',
+  'PREPARING',
+  'READY',
+  'SERVED',
+  'CANCELLED',
+] as const;
+
+export type TabStatus = 'OPEN' | 'CLOSED' | 'VOID';
+
+export const TAB_STATUSES: readonly TabStatus[] = [
+  'OPEN',
+  'CLOSED',
+  'VOID',
+] as const;
+
+// ---------------------------------------------------------------------------
+// Finance & Invoicing (Developer 4)
+// ---------------------------------------------------------------------------
+export type PaymentMethod = 'CASH' | 'CARD' | 'UPI' | 'BANK_TRANSFER';
+
+export const PAYMENT_METHODS: readonly PaymentMethod[] = [
+  'CASH',
+  'CARD',
+  'UPI',
+  'BANK_TRANSFER',
+] as const;
+
+export type PaymentStatus =
+  | 'PENDING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'REFUNDED';
+
+export const PAYMENT_STATUSES: readonly PaymentStatus[] = [
+  'PENDING',
+  'COMPLETED',
+  'FAILED',
+  'REFUNDED',
+] as const;
+
+export type RecipientType = 'MEMBER' | 'BUSINESS_CLIENT' | 'WALK_IN';
+
+export const RECIPIENT_TYPES: readonly RecipientType[] = [
+  'MEMBER',
+  'BUSINESS_CLIENT',
+  'WALK_IN',
+] as const;
+
+export type InvoiceStatus =
+  | 'DRAFT'
+  | 'ISSUED'
+  | 'PARTIALLY_PAID'
+  | 'PAID'
+  | 'OVERDUE'
+  | 'VOID';
+
+export const INVOICE_STATUSES: readonly InvoiceStatus[] = [
+  'DRAFT',
+  'ISSUED',
+  'PARTIALLY_PAID',
+  'PAID',
+  'OVERDUE',
+  'VOID',
+] as const;
+
+// ---------------------------------------------------------------------------
+// Staff, HR & Enquiries (Developer 4)
+// ---------------------------------------------------------------------------
+export type Department =
+  | 'MANAGEMENT'
+  | 'FRONT_DESK'
+  | 'COURTS'
+  | 'SHOP'
+  | 'BAR'
+  | 'MAINTENANCE';
+
+export const DEPARTMENTS: readonly Department[] = [
+  'MANAGEMENT',
+  'FRONT_DESK',
+  'COURTS',
+  'SHOP',
+  'BAR',
+  'MAINTENANCE',
+] as const;
+
+export type ShiftStatus =
+  | 'SCHEDULED'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'MISSED'
+  | 'CANCELLED';
+
+export const SHIFT_STATUSES: readonly ShiftStatus[] = [
+  'SCHEDULED',
+  'IN_PROGRESS',
+  'COMPLETED',
+  'MISSED',
+  'CANCELLED',
+] as const;
+
+export type LeaveType = 'CASUAL' | 'SICK' | 'ANNUAL' | 'UNPAID';
+
+export const LEAVE_TYPES: readonly LeaveType[] = [
+  'CASUAL',
+  'SICK',
+  'ANNUAL',
+  'UNPAID',
+] as const;
+
+export type LeaveStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+
+export const LEAVE_STATUSES: readonly LeaveStatus[] = [
+  'PENDING',
+  'APPROVED',
+  'REJECTED',
+  'CANCELLED',
+] as const;
+
+export type EnquiryStatus =
+  | 'NEW'
+  | 'CONTACTED'
+  | 'TRIAL_SCHEDULED'
+  | 'QUOTE_SENT'
+  | 'CONVERTED'
+  | 'CLOSED';
+
+export const ENQUIRY_STATUSES: readonly EnquiryStatus[] = [
+  'NEW',
+  'CONTACTED',
+  'TRIAL_SCHEDULED',
+  'QUOTE_SENT',
+  'CONVERTED',
+  'CLOSED',
+] as const;
+
+export type QuoteStatus =
+  | 'DRAFT'
+  | 'SENT'
+  | 'ACCEPTED'
+  | 'EXPIRED'
+  | 'REJECTED';
+
+export const QUOTE_STATUSES: readonly QuoteStatus[] = [
+  'DRAFT',
+  'SENT',
+  'ACCEPTED',
+  'EXPIRED',
+  'REJECTED',
+] as const;
+
+// ---------------------------------------------------------------------------
+// Standard Server Action & API Contracts
+// ---------------------------------------------------------------------------
+export type ActionResult<T = unknown> =
+  | {
+      success: true;
+      data: T;
+      message?: string;
+    }
+  | {
+      success: false;
+      error: string;
+      code?: string;
+      fieldErrors?: Record<string, string[]>;
+    };
+
+export interface PaginatedResult<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
