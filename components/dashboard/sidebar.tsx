@@ -35,12 +35,9 @@ const SIDEBAR_SECTIONS: { title: string; items: SidebarItem[] }[] = [
     title: 'Core Platform',
     items: [
       { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
-<<<<<<< HEAD
       { href: '/dashboard/portal', label: 'Member Portal', icon: Sparkles },
-      { href: '/dashboard/membership-plans', label: 'Plans & Pricing', icon: Shield },
-=======
       { href: '/dashboard/members', label: 'Members', icon: Users },
->>>>>>> 5eb3d40743193fc7e5ac61cba64f7a3e387bc630
+      { href: '/dashboard/membership-plans', label: 'Plans & Pricing', icon: Shield },
       { href: '/dashboard/profile', label: 'User Profile', icon: User },
     ],
   },
