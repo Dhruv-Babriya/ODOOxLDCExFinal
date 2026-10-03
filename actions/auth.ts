@@ -73,6 +73,7 @@ export async function signUpAction(input: RegisterInput): Promise<ActionResult<{
       options: {
         data: {
           full_name: validated.fullName,
+          phone: validated.phone || null,
           role: 'MEMBER',
         },
       },
