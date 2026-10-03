@@ -7,13 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { signInAction } from '@/actions/auth';
-import { LogIn, Eye, EyeOff, Sparkles, AlertCircle } from 'lucide-react';
+import { LogIn, Eye, EyeOff, AlertCircle } from 'lucide-react';
 
-const DEMO_ACCOUNTS = [
-  { role: 'Club Owner', email: 'owner@thechampionsclub.com', desc: 'Full Club Authority' },
-  { role: 'General Manager', email: 'manager@thechampionsclub.com', desc: 'Operations & Membership Plans' },
-  { role: 'Operations Staff', email: 'staff@thechampionsclub.com', desc: 'Front Desk, Pro Shop & Cafe' },
-];
 
 function LoginForm() {
   const router = useRouter();
@@ -58,11 +53,6 @@ function LoginForm() {
     router.refresh();
   };
 
-  const handleDemoFill = (demoEmail: string) => {
-    setEmail(demoEmail);
-    setPassword('Password123!');
-    setError(null);
-  };
 
   return (
     <div className="space-y-4">
@@ -155,31 +145,6 @@ function LoginForm() {
         </CardFooter>
       </Card>
 
-      {/* Quick Demo Accounts Helper */}
-      <div className="p-4 rounded-xl border border-zinc-800/80 bg-zinc-950/70 shadow-lg text-xs space-y-2.5">
-        <div className="flex items-center gap-1.5 text-zinc-300 font-semibold">
-          <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
-          <span>Quick Demo Access (1-Click Fill)</span>
-        </div>
-        <p className="text-[11px] text-zinc-400">
-          Click any role below to prefill demo credentials (password: <code className="text-emerald-400 font-mono">Password123!</code>):
-        </p>
-        <div className="grid grid-cols-2 gap-2 pt-1">
-          {DEMO_ACCOUNTS.map((d) => (
-            <button
-              key={d.email}
-              type="button"
-              onClick={() => handleDemoFill(d.email)}
-              className="p-2 text-left rounded-lg bg-zinc-900/80 hover:bg-zinc-800/80 border border-zinc-800 hover:border-emerald-500/40 transition-all text-[11px] group focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500"
-            >
-              <span className="font-semibold text-white block group-hover:text-emerald-400 transition-colors">
-                {d.role}
-              </span>
-              <span className="text-zinc-500 text-[10px] block truncate">{d.desc}</span>
-            </button>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
