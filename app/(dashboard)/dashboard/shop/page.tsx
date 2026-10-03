@@ -89,16 +89,6 @@ export default async function ShopOrdersDashboardPage() {
     <DashboardModuleShell
       title="Pro Shop & Commerce Orders"
       subtitle="Physical counter sales and online orders drawing from the unified club inventory."
-      developerOwner="Developer 3"
-      developerRole="Shop & Bar Specialist"
-      tables={['shop_orders', 'shop_order_items', 'products', 'inventory']}
-      contracts={['ShopOrder', 'OrderStatus', 'OrderChannel', 'shopOrderCreateSchema']}
-      phase1Roadmap={[
-        'Fast Point-of-Sale (POS) counter interface for front desk & shop staff with quick SKU/item search',
-        'Pickup & Delivery fulfillment workflows for home orders with address validation',
-        'Atomic stock decrementing and concurrency protection via database stored procedures',
-        'Automatic server-side member tier discount calculation (Gold 15%, Silver 10%, Junior 5%)',
-      ]}
     >
       <ShopPageClient
         initialOrders={(orders || []) as unknown as React.ComponentProps<typeof ShopPageClient>['initialOrders']}

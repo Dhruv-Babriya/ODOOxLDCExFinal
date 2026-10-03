@@ -45,16 +45,6 @@ export default async function InventoryDashboardPage() {
     <DashboardModuleShell
       title="Live Inventory & Low-Stock Alerts"
       subtitle="Single source of truth for stock quantities shared across counter point-of-sale and online orders."
-      developerOwner="Developer 3"
-      developerRole="Shop & Bar Specialist"
-      tables={['inventory', 'inventory_transactions', 'products']}
-      contracts={['Product', 'InventoryTransaction', 'inventoryAdjustmentSchema']}
-      phase1Roadmap={[
-        'Real-time low-stock threshold alert cards and quick filter for replenishment',
-        'Stock adjustment modal with reason capture (RESTOCK, ADJUSTMENT, SALE, RETURN, DAMAGE)',
-        'Traceable transaction audit trail with user identity and reference links',
-        'Prevention of negative inventory stock at PostgreSQL engine row-level locks',
-      ]}
     >
       <InventoryManager
         products={(products || []) as unknown as React.ComponentProps<typeof InventoryManager>['products']}

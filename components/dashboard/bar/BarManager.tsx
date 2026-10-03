@@ -482,7 +482,7 @@ export function BarManager({
         type: 'success',
         message: `Tab settled and closed! Total bill amount: ${formatCurrency(
           res.data.outstandingAmount
-        )}. Handed over to Developer 4 payment module.`,
+        )}. Registered for payment settlement.`,
       });
 
       setTabs(tabs.map((t) => (t.id === tabId ? { ...t, status: 'CLOSED' } : t)));
@@ -1814,7 +1814,7 @@ export function BarManager({
         </div>
       )}
 
-      {/* MODAL 3: CLOSE & SETTLE TAB (FINANCIAL HANDOFF TO DEVELOPER 4) */}
+      {/* MODAL 3: CLOSE & SETTLE TAB (PAYMENT SETTLEMENT) */}
       {settlingTab && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
           <Card className="w-full max-w-md border-zinc-800 bg-zinc-900 shadow-2xl">
@@ -1848,10 +1848,10 @@ export function BarManager({
 
               <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-800/50 space-y-1">
                 <div className="text-[11px] text-emerald-400 font-bold uppercase">
-                  Developer 4 Payment Handoff
+                  Payment Settlement
                 </div>
                 <p className="text-[11px] text-zinc-300">
-                  Closing this tab will compute the exact unsettled total across all orders, release the associated table, and expose the financial balance to Developer 4&apos;s payment settlement register.
+                  Closing this tab will compute the exact unsettled total across all orders, release the associated table, and register the final invoice for payment settlement.
                 </p>
               </div>
 

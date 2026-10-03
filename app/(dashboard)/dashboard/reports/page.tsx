@@ -9,16 +9,7 @@ export default async function ExecutiveReportsDashboardPage() {
     return (
       <DashboardModuleShell
         title="Executive Operational & Revenue Analytics"
-        subtitle="Owner consolidation of money received from courts, pro shop, and cafeteria."
-        developerOwner="Developer 4"
-        developerRole="Finance, Staff & Analytics Specialist"
-        tables={['payments', 'invoices', 'court_bookings', 'shop_orders', 'bar_orders']}
-        contracts={['RevenueReport', 'MonthlyRevenueAggregate', 'DepartmentBreakdown']}
-        phase1Roadmap={[
-          'Recharts interactive trend lines',
-          'Revenue distribution donut chart',
-          'Daily operational summary',
-        ]}
+        subtitle="Consolidated revenue analytics from courts, pro shop, and cafeteria."
       >
         <div className="p-6 bg-rose-950/20 border border-rose-900 text-rose-400 rounded-lg">
           Failed to load dashboard metrics: {!result.success ? result.error : 'Unknown error'}
@@ -30,16 +21,7 @@ export default async function ExecutiveReportsDashboardPage() {
   return (
     <DashboardModuleShell
       title="Executive Operational & Revenue Analytics"
-      subtitle="Owner consolidation of money received from courts, pro shop, and cafeteria across day/week/month."
-      developerOwner="Developer 4"
-      developerRole="Finance, Staff & Analytics Specialist"
-      tables={['payments', 'invoices', 'court_bookings', 'shop_orders', 'bar_orders']}
-      contracts={['RevenueReport', 'MonthlyRevenueAggregate', 'DepartmentBreakdown']}
-      phase1Roadmap={[
-        'Recharts interactive trend lines',
-        'Revenue distribution donut chart',
-        'Daily operational summary',
-      ]}
+      subtitle="Consolidated revenue analytics across day, week, and month."
     >
       <ReportsDashboardClient metrics={result.data} />
     </DashboardModuleShell>

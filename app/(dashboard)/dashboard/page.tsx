@@ -1,3 +1,4 @@
+
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth/session';
@@ -8,53 +9,86 @@ import {
   Users,
   CalendarDays,
   ShoppingBag,
+  Coffee,
+  Receipt,
   BarChart3,
-  ShieldCheck,
   ArrowRight,
-  Database,
-  Lock,
+  PlusCircle,
+  Clock,
+  Sparkles,
 } from 'lucide-react';
 
-const MODULE_OVERVIEWS = [
+const CLUB_MODULES = [
   {
-    title: 'Core Platform & Memberships',
-    dev: 'Developer 1',
-    role: 'Core Platform & Membership Lead',
+    title: 'Membership & Profiles',
+    tag: 'Members & Roster',
     href: '/dashboard/members',
     icon: Users,
     color: 'text-emerald-400',
-    description: 'Member records, profiles, Gold/Silver/Junior plans, status tracking & expiry.',
-    tables: ['profiles', 'members', 'membership_plans', 'membership_history'],
+    description: 'Member directory, account status, Gold & Silver tier plans, renewals, and history.',
+    actions: [
+      { label: 'Register New Member', href: '/dashboard/members/new' },
+      { label: 'Manage Plans & Tiers', href: '/dashboard/membership-plans' },
+    ],
   },
   {
-    title: 'Courts & Bookings',
-    dev: 'Developer 2',
-    role: 'Courts & Booking Lead',
+    title: 'Courts & Reservations',
+    tag: 'Athletic Facilities',
     href: '/dashboard/bookings',
     icon: CalendarDays,
     color: 'text-sky-400',
-    description: 'Courts schedule, GIST exclusion concurrency, 1hr sessions, Friday social play.',
-    tables: ['courts', 'court_bookings', 'booking_participants'],
+    description: 'Clay & hard tennis courts, cricket nets, real-time schedule, and session bookings.',
+    actions: [
+      { label: 'View Court Grid', href: '/dashboard/bookings' },
+      { label: 'Court Availability', href: '/courts' },
+    ],
   },
   {
-    title: 'Shop, Inventory & Bar',
-    dev: 'Developer 3',
-    role: 'Commerce & F&B Lead',
+    title: 'Pro Shop & Inventory',
+    tag: 'Retail & Gear',
     href: '/dashboard/shop',
     icon: ShoppingBag,
     color: 'text-amber-400',
-    description: 'Shared inventory, point-of-sale, online orders, bar tables, menu & kitchen tabs.',
-    tables: ['products', 'inventory', 'shop_orders', 'bar_tables', 'menu_items', 'customer_tabs'],
+    description: 'Point-of-sale checkout, sports equipment catalog, stock tracking, and orders.',
+    actions: [
+      { label: 'Open POS Register', href: '/dashboard/shop' },
+      { label: 'Inventory Stock', href: '/dashboard/inventory' },
+    ],
   },
   {
-    title: 'Finance, Staff & Reporting',
-    dev: 'Developer 4',
-    role: 'Finance, Staff & Analytics Lead',
+    title: 'Bar & Nutrition Cafe',
+    tag: 'Hospitality & Dining',
+    href: '/dashboard/bar',
+    icon: Coffee,
+    color: 'text-orange-400',
+    description: 'Table management, kitchen ordering, member tabs, and artisan nutrition menu.',
+    actions: [
+      { label: 'Active Tabs & Orders', href: '/dashboard/bar' },
+    ],
+  },
+  {
+    title: 'Billing & Invoicing',
+    tag: 'Financial Operations',
+    href: '/dashboard/invoices',
+    icon: Receipt,
+    color: 'text-teal-400',
+    description: 'Consolidated member invoicing, booking fees, pro shop balances, and receipts.',
+    actions: [
+      { label: 'Invoice Register', href: '/dashboard/invoices' },
+      { label: 'Payment History', href: '/dashboard/payments' },
+    ],
+  },
+  {
+    title: 'Analytics & Staff Roster',
+    tag: 'Executive Overview',
     href: '/dashboard/reports',
     icon: BarChart3,
     color: 'text-purple-400',
-    description: 'Consolidated payments, client invoices, staff shifts, leave requests & owner analytics.',
-    tables: ['payments', 'invoices', 'staff', 'staff_shifts', 'enquiries', 'quotes'],
+    description: 'Club revenue analytics, court utilization rates, and staff duty rosters.',
+    actions: [
+      { label: 'Executive Reports', href: '/dashboard/reports' },
+      { label: 'Staff Management', href: '/dashboard/staff' },
+    ],
   },
 ];
 
@@ -63,106 +97,128 @@ export default async function DashboardOverviewPage() {
   if (user?.role === 'MEMBER') {
     redirect('/dashboard/portal');
   }
+
   return (
     <div className="space-y-8">
       {/* Welcome Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-zinc-800">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">The Champions Club Dashboard</h1>
-            <Badge variant="success">Phase 0 Ready</Badge>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+              The Champions Club Management
+            </h1>
+            <Badge variant="success" className="text-xs">
+              {user?.role || 'STAFF'}
+            </Badge>
           </div>
           <p className="text-sm text-zinc-400 mt-1">
-            System architectural foundation, PostgreSQL database with RLS, and shared contracts ready for 4-developer parallel feature implementation.
+            Welcome back, <span className="text-zinc-200 font-semibold">{user?.fullName || 'Club Administrator'}</span>. All facility modules and operational departments are active.
           </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard/members/new">
+            <Button variant="primary" size="sm" className="gap-2 shadow-lg shadow-emerald-950/40">
+              <PlusCircle className="h-4 w-4" />
+              <span>Register Member</span>
+            </Button>
+          </Link>
+          <Link href="/dashboard/bookings">
+            <Button variant="outline" size="sm" className="gap-2 border-zinc-700">
+              <CalendarDays className="h-4 w-4" />
+              <span>Book Court</span>
+            </Button>
+          </Link>
         </div>
       </div>
 
-      {/* Architecture Highlights */}
+      {/* Operational Highlights */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
         <Card className="border-zinc-800 bg-zinc-900/40">
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2 text-zinc-400">
-              <Database className="h-4 w-4 text-emerald-400" />
-              <span className="text-xs font-semibold uppercase tracking-wider">Database Status</span>
+              <Sparkles className="h-4 w-4 text-emerald-400" />
+              <span className="text-xs font-semibold uppercase tracking-wider">Facility Status</span>
             </div>
           </CardHeader>
           <CardContent className="space-y-1">
-            <div className="text-2xl font-bold text-white">28 Normalized Tables</div>
-            <p className="text-xs text-zinc-400">Active PostgreSQL 17 schema with RLS on every table</p>
+            <div className="text-2xl font-bold text-white">All Courts Operational</div>
+            <p className="text-xs text-zinc-400">Floodlit clay & hard courts ready for booking</p>
           </CardContent>
         </Card>
 
         <Card className="border-zinc-800 bg-zinc-900/40">
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2 text-zinc-400">
-              <Lock className="h-4 w-4 text-sky-400" />
-              <span className="text-xs font-semibold uppercase tracking-wider">Concurrency Guard</span>
+              <Clock className="h-4 w-4 text-sky-400" />
+              <span className="text-xs font-semibold uppercase tracking-wider">Daily Hours</span>
             </div>
           </CardHeader>
           <CardContent className="space-y-1">
-            <div className="text-2xl font-bold text-white">GIST Exclusion Active</div>
-            <p className="text-xs text-zinc-400">Mathematical guarantee against double-booking courts</p>
+            <div className="text-2xl font-bold text-white">06:00 AM – 10:00 PM</div>
+            <p className="text-xs text-zinc-400">Courts, Pro Shop, and Nutrition Cafe open</p>
           </CardContent>
         </Card>
 
         <Card className="border-zinc-800 bg-zinc-900/40">
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2 text-zinc-400">
-              <ShieldCheck className="h-4 w-4 text-amber-400" />
-              <span className="text-xs font-semibold uppercase tracking-wider">Security & RBAC</span>
+              <Receipt className="h-4 w-4 text-amber-400" />
+              <span className="text-xs font-semibold uppercase tracking-wider">Commerce System</span>
             </div>
           </CardHeader>
           <CardContent className="space-y-1">
-            <div className="text-2xl font-bold text-white">6 Granular Roles</div>
-            <p className="text-xs text-zinc-400">Owner, Admin, Front Desk, Shop, Bar, Member</p>
+            <div className="text-2xl font-bold text-white">Unified POS & Member Tabs</div>
+            <p className="text-xs text-zinc-400">Consolidated checkout with member discount rules</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Module Cards */}
+      {/* Club Operations Grid */}
       <div className="space-y-4">
-        <h2 className="text-lg font-bold text-white tracking-tight">Four-Developer Module Scaffolds</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {MODULE_OVERVIEWS.map((mod) => {
+        <h2 className="text-lg font-bold text-white tracking-tight">Facility & Operations Modules</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {CLUB_MODULES.map((mod) => {
             const Icon = mod.icon;
             return (
-              <Card key={mod.title} className="border-zinc-800 bg-zinc-900/50 flex flex-col justify-between hover:border-zinc-700 transition-colors">
+              <Card
+                key={mod.title}
+                className="border-zinc-800 bg-zinc-900/50 flex flex-col justify-between hover:border-zinc-700 transition-all shadow-lg"
+              >
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
                       <div className="p-2 rounded-lg bg-zinc-800/80 border border-zinc-700/80">
                         <Icon className={`h-5 w-5 ${mod.color}`} />
                       </div>
-                      <div>
-                        <CardTitle className="text-base text-white">{mod.title}</CardTitle>
-                        <span className="text-[11px] font-mono text-emerald-400">{mod.dev}</span>
-                      </div>
+                      <CardTitle className="text-base text-white">{mod.title}</CardTitle>
                     </div>
-                    <Badge variant="outline" className="text-[10px]">
-                      {mod.role.split(' ')[0]}
+                    <Badge variant="outline" className="text-[10px] border-zinc-700 text-zinc-400">
+                      {mod.tag}
                     </Badge>
                   </div>
-                  <CardDescription className="text-xs text-zinc-400 pt-2">
+                  <CardDescription className="text-xs text-zinc-400 pt-2 leading-relaxed">
                     {mod.description}
                   </CardDescription>
                 </CardHeader>
 
-                <CardContent className="space-y-3">
-                  <div className="text-[11px] font-mono text-zinc-500 flex flex-wrap gap-1.5">
-                    {mod.tables.map((t) => (
-                      <span key={t} className="px-2 py-0.5 rounded bg-zinc-950/80 border border-zinc-800 text-zinc-400">
-                        {t}
-                      </span>
+                <div className="p-6 pt-0 space-y-3 border-t border-zinc-800/80 mt-auto">
+                  <div className="flex flex-wrap gap-2 pt-3">
+                    {mod.actions.map((act) => (
+                      <Link
+                        key={act.label}
+                        href={act.href}
+                        className="text-xs text-zinc-300 hover:text-emerald-400 underline-offset-4 hover:underline"
+                      >
+                        {act.label}
+                      </Link>
                     ))}
                   </div>
-                </CardContent>
 
-                <div className="p-6 pt-0 border-t border-zinc-800/80">
-                  <Link href={mod.href} className="w-full">
-                    <Button variant="ghost" size="sm" className="w-full justify-between hover:text-emerald-400">
-                      <span>Open Module Scaffold</span>
-                      <ArrowRight className="h-4 w-4" />
+                  <Link href={mod.href} className="block pt-2">
+                    <Button variant="ghost" size="sm" className="w-full justify-between hover:text-emerald-400 text-xs">
+                      <span>Enter Module</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
                     </Button>
                   </Link>
                 </div>

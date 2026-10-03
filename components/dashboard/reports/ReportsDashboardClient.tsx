@@ -223,7 +223,7 @@ export function ReportsDashboardClient({ metrics }: ReportsDashboardClientProps)
               <span>Multi-Stream Revenue Architecture</span>
             </CardTitle>
             <CardDescription className="text-xs text-zinc-400">
-              Cross-cutting aggregation contract established in Phase 0
+              Automated revenue tracking across all active club operations
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -233,21 +233,21 @@ export function ReportsDashboardClient({ metrics }: ReportsDashboardClientProps)
                   <Activity className="h-4 w-4 text-sky-400" />
                   <span>Court Bookings Revenue</span>
                 </div>
-                <div className="text-emerald-400 font-mono text-xs text-right">public.court_bookings</div>
+                <div className="text-emerald-400 font-mono text-xs text-right">Automated Settlement</div>
               </div>
               <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800 flex justify-between items-center">
                 <div className="flex items-center gap-2 text-zinc-300 font-semibold">
                   <ShoppingBag className="h-4 w-4 text-amber-400" />
                   <span>Pro Shop Revenue</span>
                 </div>
-                <div className="text-emerald-400 font-mono text-xs text-right">public.shop_orders</div>
+                <div className="text-emerald-400 font-mono text-xs text-right">POS / Online Orders</div>
               </div>
               <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800 flex justify-between items-center">
                 <div className="flex items-center gap-2 text-zinc-300 font-semibold">
                   <Coffee className="h-4 w-4 text-purple-400" />
                   <span>Bar & Nutrition Revenue</span>
                 </div>
-                <div className="text-emerald-400 font-mono text-xs text-right">public.bar_orders</div>
+                <div className="text-emerald-400 font-mono text-xs text-right">Table & Member Tabs</div>
               </div>
             </div>
           </CardContent>

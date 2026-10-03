@@ -101,63 +101,69 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Phase 0 Architecture Status */}
+      {/* Membership & Club Privileges */}
       <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-8 backdrop-blur-md">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-zinc-800">
+        <div className="rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-900/90 via-zinc-900/50 to-zinc-950 p-8 md:p-12 backdrop-blur-md shadow-2xl">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-8 border-b border-zinc-800">
             <div>
               <div className="flex items-center gap-2">
-                <Badge variant="success">Phase 0 Complete</Badge>
-                <h3 className="text-lg font-bold text-white">Four-Developer Team Architecture Established</h3>
+                <Badge variant="success">Exclusive Privileges</Badge>
+                <h3 className="text-xl md:text-2xl font-bold text-white tracking-tight">
+                  Champions Club Membership Experience
+                </h3>
               </div>
-              <p className="text-xs text-zinc-400 mt-1">
-                Database schema, PostgreSQL exclusion constraints, RBAC, Supabase RLS, and shared contracts ready for parallel Phase 1 development.
+              <p className="text-sm text-zinc-400 mt-2 max-w-2xl">
+                Unlock daily free court hours, preferential tournament bookings, and exclusive discounts across the Pro Shop and Nutrition Cafe.
               </p>
             </div>
             <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400 hover:text-emerald-300"
+              href="/memberships"
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-emerald-950/40 hover:bg-emerald-500 transition-all self-start md:self-auto"
             >
-              <span>Explore Dashboard Scaffolds</span>
-              <ArrowRight className="h-3.5 w-3.5" />
+              <span>View All Tiers & Pricing</span>
+              <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-            <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
+            <div className="p-5 rounded-xl bg-zinc-950/80 border border-zinc-800/80 space-y-2.5 hover:border-emerald-500/40 transition-colors">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-white">Developer 1</span>
-                <span className="text-[10px] text-emerald-400 font-mono">CORE & MEMBER</span>
+                <span className="text-sm font-bold text-white">Court Privileges</span>
+                <span className="text-[10px] text-emerald-400 font-mono font-semibold uppercase">Daily Booking</span>
               </div>
-              <p className="text-xs text-zinc-400">Auth, RBAC, Profiles, Memberships, Expiry & History</p>
-              <div className="text-[11px] text-zinc-500 font-mono">public.members, plans</div>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                Complimentary court hours, advance reservation window, and floodlit evening session priority.
+              </p>
             </div>
 
-            <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 space-y-2">
+            <div className="p-5 rounded-xl bg-zinc-950/80 border border-zinc-800/80 space-y-2.5 hover:border-sky-500/40 transition-colors">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-white">Developer 2</span>
-                <span className="text-[10px] text-sky-400 font-mono">COURTS & BOOKING</span>
+                <span className="text-sm font-bold text-white">Pro Shop Savings</span>
+                <span className="text-[10px] text-sky-400 font-mono font-semibold uppercase">Discounts</span>
               </div>
-              <p className="text-xs text-zinc-400">Courts, GIST Exclusion, Concurrency, Pricing & Social Play</p>
-              <div className="text-[11px] text-zinc-500 font-mono">public.court_bookings</div>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                Direct member discounts on performance gear, racket stringing, and club merchandise.
+              </p>
             </div>
 
-            <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 space-y-2">
+            <div className="p-5 rounded-xl bg-zinc-950/80 border border-zinc-800/80 space-y-2.5 hover:border-amber-500/40 transition-colors">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-white">Developer 3</span>
-                <span className="text-[10px] text-amber-400 font-mono">SHOP & BAR</span>
+                <span className="text-sm font-bold text-white">Cafe & Member Tab</span>
+                <span className="text-[10px] text-amber-400 font-mono font-semibold uppercase">Hospitality</span>
               </div>
-              <p className="text-xs text-zinc-400">Unified Inventory, Counter/Online Sales, Tables & Kitchen</p>
-              <div className="text-[11px] text-zinc-500 font-mono">public.inventory, orders</div>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                Seamless digital member tabs, table service, and nutrition dining discounts post-training.
+              </p>
             </div>
 
-            <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 space-y-2">
+            <div className="p-5 rounded-xl bg-zinc-950/80 border border-zinc-800/80 space-y-2.5 hover:border-purple-500/40 transition-colors">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-white">Developer 4</span>
-                <span className="text-[10px] text-purple-400 font-mono">FINANCE & STAFF</span>
+                <span className="text-sm font-bold text-white">Digital Portal</span>
+                <span className="text-[10px] text-purple-400 font-mono font-semibold uppercase">Account</span>
               </div>
-              <p className="text-xs text-zinc-400">Payments, Invoices, Staff Shifts, Quotes & Owner Reports</p>
-              <div className="text-[11px] text-zinc-500 font-mono">public.payments, invoices</div>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                Real-time booking management, consolidated monthly invoicing, and match history tracking.
+              </p>
             </div>
           </div>
         </div>

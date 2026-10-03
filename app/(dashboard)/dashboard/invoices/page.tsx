@@ -26,24 +26,14 @@ export default async function InvoicesDashboardPage() {
   return (
     <DashboardModuleShell
       title="Member & Client Invoicing"
-      subtitle="Corporate membership billing, line-item itemized invoices, balance dues, and payment tracking."
-      developerOwner="Developer 4"
-      developerRole="Finance, Staff & Analytics Specialist"
-      tables={['invoices', 'invoice_items', 'payments', 'members']}
-      contracts={['Invoice', 'InvoiceItem', 'InvoiceStatus', 'RecipientType', 'invoiceCreateSchema']}
-      phase1Roadmap={[
-        'Interactive invoice generator with dynamic line items and tax calculation',
-        'Business client vs individual member invoicing options',
-        'PDF invoice generation and email dispatch service',
-        'Aging report for unpaid and overdue invoices',
-      ]}
+      subtitle="Corporate membership billing, itemized invoices, balance dues, and payment tracking."
     >
       <InvoiceHeaderActions />
       <Card className="border-zinc-800 bg-zinc-900/50">
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <div>
             <CardTitle className="text-base text-white">Invoice Register</CardTitle>
-            <p className="text-xs text-zinc-400">Queried from public.invoices</p>
+            <p className="text-xs text-zinc-400">Consolidated member billing and facility invoices</p>
           </div>
           <Badge variant="outline">{invoices?.length || 0} Invoices</Badge>
         </CardHeader>
@@ -84,8 +74,8 @@ export default async function InvoicesDashboardPage() {
           ) : (
             <div className="text-center py-10 space-y-2 text-zinc-400 text-xs">
               <Receipt className="h-8 w-8 text-zinc-600 mx-auto" />
-              <p>No invoices created yet. Developer 4 will build the invoicing workflow in Phase 1.</p>
-              <p className="font-mono text-zinc-500">Schema and Zod validations ready in lib/validations/payment.ts</p>
+              <p>No invoices created yet.</p>
+              <p className="text-zinc-500">Invoices will automatically appear here when memberships, bookings, or purchases are billed.</p>
             </div>
           )}
         </CardContent>

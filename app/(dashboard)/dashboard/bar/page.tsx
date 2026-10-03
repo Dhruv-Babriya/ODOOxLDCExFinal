@@ -99,16 +99,6 @@ export default async function BarCafeteriaDashboardPage() {
     <DashboardModuleShell
       title="Bar & Nutrition Cafeteria"
       subtitle="Floor table seating, kitchen order tickets, member tabs, and F&B order management."
-      developerOwner="Developer 3"
-      developerRole="Shop & Bar Specialist"
-      tables={['bar_tables', 'customer_tabs', 'bar_orders', 'bar_order_items', 'menu_items']}
-      contracts={['BarTable', 'BarOrder', 'KitchenStatus', 'TabStatus', 'barOrderCreateSchema']}
-      phase1Roadmap={[
-        'Interactive table layout visualizer with quick status toggles (Available, Occupied, Reserved)',
-        'Customer Tab opening, item charging, running balance calculation, and table release closure',
-        'Live kitchen display screen (KDS) showing pending, preparing, ready, and served orders',
-        'Automatic server-side member discount calculation (15% Gold, 10% Silver, 5% Junior)',
-      ]}
     >
       <BarManager
         tables={(tables || []) as unknown as React.ComponentProps<typeof BarManager>['tables']}

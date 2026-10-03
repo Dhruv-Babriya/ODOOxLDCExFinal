@@ -23,17 +23,7 @@ export default async function EnquiriesDashboardPage() {
   return (
     <DashboardModuleShell
       title="Enquiries, Leads & Trial Requests"
-      subtitle="Visitor trial bookings from the landing page, follow-up CRM workflows, and quote dispatch."
-      developerOwner="Developer 4"
-      developerRole="Finance, Staff & Analytics Specialist"
-      tables={['enquiries', 'quotes', 'membership_plans']}
-      contracts={['Enquiry', 'Quote', 'EnquiryStatus', 'QuoteStatus', 'publicEnquirySchema']}
-      phase1Roadmap={[
-        'Lead status pipeline: New -> Contacted -> Trial Scheduled -> Quote Sent -> Converted',
-        'Staff assignment and follow-up reminders',
-        'Official quote generator with custom discount and validity window',
-        'One-click conversion of accepted quotes into member records',
-      ]}
+      subtitle="Visitor trial bookings, follow-up CRM workflows, and quote dispatch."
     >
       <EnquiryHeaderActions />
       <EnquiryDashboardClient enquiries={enquiries || []} />

@@ -419,8 +419,7 @@ export function MemberDetailView({
             </div>
 
             <p className="text-[11px] text-zinc-500 italic">
-              These rules are automatically consumed by Developer 2 (Courts) and Developer 3 (Shop/Bar)
-              via the shared pricing utilities in <code className="text-emerald-400 font-mono">lib/pricing.ts</code>.
+              These tier rules and discounts are automatically applied during court reservations, pro shop checkout, and cafeteria tab settlements.
             </p>
           </CardContent>
         </Card>

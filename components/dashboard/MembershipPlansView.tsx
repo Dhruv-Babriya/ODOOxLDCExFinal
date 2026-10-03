@@ -29,11 +29,13 @@ import {
 
 interface MembershipPlansViewProps {
   initialPlans: MembershipPlanItem[];
+  userRole?: string;
 }
 
-export function MembershipPlansView({ initialPlans }: MembershipPlansViewProps) {
+export function MembershipPlansView({ initialPlans, userRole }: MembershipPlansViewProps) {
   const router = useRouter();
   const [plans] = useState<MembershipPlanItem[]>(initialPlans);
+  const canManagePlans = userRole === 'ADMIN' || userRole === 'OWNER';
 
   // Edit Plan State
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -65,6 +67,7 @@ export function MembershipPlansView({ initialPlans }: MembershipPlansViewProps) 
   const [createError, setCreateError] = useState<string | null>(null);
 
   const openEditModal = (plan: MembershipPlanItem) => {
+    if (!canManagePlans) return;
     setEditingPlan(plan);
     setEditPrice(plan.price);
     setEditDuration(plan.duration_days);
@@ -161,14 +164,16 @@ export function MembershipPlansView({ initialPlans }: MembershipPlansViewProps) 
             Configure Gold, Silver, and Junior tiers with dynamic benefits across courts, pro shop, and cafeteria.
           </p>
         </div>
-        <Button
-          variant="primary"
-          onClick={() => setIsCreateOpen(true)}
-          className="gap-2 shadow-lg shadow-emerald-950/40"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Create New Tier Plan</span>
-        </Button>
+        {canManagePlans && (
+          <Button
+            variant="primary"
+            onClick={() => setIsCreateOpen(true)}
+            className="gap-2 shadow-lg shadow-emerald-950/40"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Create New Tier Plan</span>
+          </Button>
+        )}
       </div>
 
       {/* Plan Cards Grid */}
@@ -281,32 +286,34 @@ export function MembershipPlansView({ initialPlans }: MembershipPlansViewProps) 
                 </CardContent>
               </div>
 
-              {/* Action Buttons */}
-              <div className="p-4 pt-0 flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => openEditModal(plan)}
-                  className="flex-1 gap-1.5 text-xs border-zinc-700"
-                >
-                  <Edit className="h-3.5 w-3.5" />
-                  <span>Edit Benefits</span>
-                </Button>
+              {/* Action Buttons (Only Manager / Owner) */}
+              {canManagePlans && (
+                <div className="p-4 pt-0 flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openEditModal(plan)}
+                    className="flex-1 gap-1.5 text-xs border-zinc-700"
+                  >
+                    <Edit className="h-3.5 w-3.5" />
+                    <span>Edit Benefits & Pricing</span>
+                  </Button>
 
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleToggleStatus(plan)}
-                  className={`text-xs px-2.5 ${
-                    plan.is_active
-                      ? 'text-zinc-400 hover:text-amber-400'
-                      : 'text-zinc-400 hover:text-emerald-400'
-                  }`}
-                  title={plan.is_active ? 'Archive Plan' : 'Restore Plan'}
-                >
-                  {plan.is_active ? <Archive className="h-3.5 w-3.5" /> : <RotateCcw className="h-3.5 w-3.5" />}
-                </Button>
-              </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleToggleStatus(plan)}
+                    className={`text-xs px-2.5 ${
+                      plan.is_active
+                        ? 'text-zinc-400 hover:text-amber-400'
+                        : 'text-zinc-400 hover:text-emerald-400'
+                    }`}
+                    title={plan.is_active ? 'Archive Plan' : 'Restore Plan'}
+                  >
+                    {plan.is_active ? <Archive className="h-3.5 w-3.5" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                  </Button>
+                </div>
+              )}
             </Card>
           );
         })}

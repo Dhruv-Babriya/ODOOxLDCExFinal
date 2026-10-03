@@ -26,22 +26,13 @@ export default async function PaymentsDashboardPage() {
     <DashboardModuleShell
       title="Payments & Revenue Collection"
       subtitle="Unified ledger for cash, card, UPI, and bank transfer receipts across courts, shop, and bar."
-      developerOwner="Developer 4"
-      developerRole="Finance, Staff & Analytics Specialist"
-      tables={['payments', 'invoices', 'shop_orders', 'court_bookings', 'bar_orders']}
-      contracts={['Payment', 'PaymentMethod', 'PaymentStatus', 'paymentRecordSchema']}
-      phase1Roadmap={[
-        'Multi-tender payment modal (Cash, Card, UPI QR, NetBanking)',
-        'Automatic invoice reconciliation upon payment insertion',
-        'Daily revenue summary card categorized by sport, shop, and food & beverage',
-      ]}
     >
       <PaymentHeaderActions />
       <Card className="border-zinc-800 bg-zinc-900/50">
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <div>
             <CardTitle className="text-base text-white">Recent Payment Receipts</CardTitle>
-            <p className="text-xs text-zinc-400">Queried from public.payments</p>
+            <p className="text-xs text-zinc-400">Consolidated transaction history and settlement receipts</p>
           </div>
           <Badge variant="outline">{payments?.length || 0} Transactions</Badge>
         </CardHeader>
@@ -80,8 +71,8 @@ export default async function PaymentsDashboardPage() {
           ) : (
             <div className="text-center py-10 space-y-2 text-zinc-400 text-xs">
               <CreditCard className="h-8 w-8 text-zinc-600 mx-auto" />
-              <p>No payments recorded yet. Developer 4 will build payment collection workflows in Phase 1.</p>
-              <p className="font-mono text-zinc-500">Atomic server action (recordPaymentAction) ready in actions/payments.ts</p>
+              <p>No payments recorded yet.</p>
+              <p className="text-zinc-500">Payments settled via Member Portal, Front Desk POS, or Online Checkout will be listed here.</p>
             </div>
           )}
         </CardContent>

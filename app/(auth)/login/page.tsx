@@ -10,10 +10,9 @@ import { signInAction } from '@/actions/auth';
 import { LogIn, Eye, EyeOff, Sparkles, AlertCircle } from 'lucide-react';
 
 const DEMO_ACCOUNTS = [
-  { role: 'Member', email: 'dhruv@gmail.com', desc: 'Active Member Portal' },
-  { role: 'Admin', email: 'admin@thechampionsclub.com', desc: 'Club Operations' },
-  { role: 'Owner', email: 'owner@thechampionsclub.com', desc: 'Full System Control' },
-  { role: 'Front Desk', email: 'frontdesk@thechampionsclub.com', desc: 'Desk Check-in' },
+  { role: 'Club Owner', email: 'owner@thechampionsclub.com', desc: 'Full Club Authority' },
+  { role: 'General Manager', email: 'manager@thechampionsclub.com', desc: 'Operations & Membership Plans' },
+  { role: 'Operations Staff', email: 'staff@thechampionsclub.com', desc: 'Front Desk, Pro Shop & Cafe' },
 ];
 
 function LoginForm() {

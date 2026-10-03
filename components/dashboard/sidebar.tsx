@@ -28,43 +28,42 @@ interface SidebarItem {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  devOwner: string;
 }
 
 const SIDEBAR_SECTIONS: { title: string; items: SidebarItem[] }[] = [
   {
     title: 'Core Platform',
     items: [
-      { href: '/dashboard', label: 'Overview', icon: LayoutDashboard, devOwner: 'Dev 1/4' },
-      { href: '/dashboard/portal', label: 'Member Portal', icon: Sparkles, devOwner: 'Dev 1' },
-      { href: '/dashboard/members', label: 'Members', icon: Users, devOwner: 'Dev 1' },
-      { href: '/dashboard/membership-plans', label: 'Plans & Pricing', icon: Shield, devOwner: 'Dev 1' },
-      { href: '/dashboard/profile', label: 'User Profile', icon: User, devOwner: 'Dev 1' },
+      { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
+      { href: '/dashboard/portal', label: 'Member Portal', icon: Sparkles },
+      { href: '/dashboard/members', label: 'Members', icon: Users },
+      { href: '/dashboard/membership-plans', label: 'Plans & Pricing', icon: Shield },
+      { href: '/dashboard/profile', label: 'User Profile', icon: User },
     ],
   },
   {
     title: 'Courts & Activities',
     items: [
-      { href: '/dashboard/courts', label: 'Courts', icon: Activity, devOwner: 'Dev 2' },
-      { href: '/dashboard/bookings', label: 'Bookings & Slots', icon: CalendarDays, devOwner: 'Dev 2' },
+      { href: '/dashboard/courts', label: 'Courts', icon: Activity },
+      { href: '/dashboard/bookings', label: 'Bookings & Slots', icon: CalendarDays },
     ],
   },
   {
     title: 'Commerce & F&B',
     items: [
-      { href: '/dashboard/shop', label: 'Pro Shop', icon: ShoppingBag, devOwner: 'Dev 3' },
-      { href: '/dashboard/inventory', label: 'Inventory', icon: Package, devOwner: 'Dev 3' },
-      { href: '/dashboard/bar', label: 'Bar & Cafeteria', icon: Coffee, devOwner: 'Dev 3' },
+      { href: '/dashboard/shop', label: 'Pro Shop', icon: ShoppingBag },
+      { href: '/dashboard/inventory', label: 'Inventory', icon: Package },
+      { href: '/dashboard/bar', label: 'Bar & Cafeteria', icon: Coffee },
     ],
   },
   {
     title: 'Finance & Operations',
     items: [
-      { href: '/dashboard/staff', label: 'Staff & Shifts', icon: UserCheck, devOwner: 'Dev 4' },
-      { href: '/dashboard/payments', label: 'Payments', icon: CreditCard, devOwner: 'Dev 4' },
-      { href: '/dashboard/invoices', label: 'Invoices', icon: Receipt, devOwner: 'Dev 4' },
-      { href: '/dashboard/enquiries', label: 'Enquiries & CRM', icon: MessageSquare, devOwner: 'Dev 4' },
-      { href: '/dashboard/reports', label: 'Executive Analytics', icon: BarChart3, devOwner: 'Dev 4' },
+      { href: '/dashboard/staff', label: 'Staff & Shifts', icon: UserCheck },
+      { href: '/dashboard/payments', label: 'Payments', icon: CreditCard },
+      { href: '/dashboard/invoices', label: 'Invoices', icon: Receipt },
+      { href: '/dashboard/enquiries', label: 'Enquiries & CRM', icon: MessageSquare },
+      { href: '/dashboard/reports', label: 'Executive Analytics', icon: BarChart3 },
     ],
   },
 ];
@@ -73,23 +72,23 @@ const MEMBER_SIDEBAR_SECTIONS: { title: string; items: SidebarItem[] }[] = [
   {
     title: 'Member Experience',
     items: [
-      { href: '/dashboard/portal', label: 'Member Portal', icon: Sparkles, devOwner: 'Dev 1' },
-      { href: '/dashboard/profile', label: 'My Profile', icon: User, devOwner: 'Dev 1' },
-      { href: '/dashboard/membership-plans', label: 'Plans & Pricing', icon: Shield, devOwner: 'Dev 1' },
+      { href: '/dashboard/portal', label: 'Member Portal', icon: Sparkles },
+      { href: '/dashboard/profile', label: 'My Profile', icon: User },
+      { href: '/dashboard/membership-plans', label: 'Plans & Pricing', icon: Shield },
     ],
   },
   {
     title: 'Courts & Activities',
     items: [
-      { href: '/dashboard/bookings', label: 'Bookings & Slots', icon: CalendarDays, devOwner: 'Dev 2' },
-      { href: '/dashboard/courts', label: 'Court Directory', icon: Activity, devOwner: 'Dev 2' },
+      { href: '/dashboard/bookings', label: 'Bookings & Slots', icon: CalendarDays },
+      { href: '/dashboard/courts', label: 'Court Directory', icon: Activity },
     ],
   },
   {
     title: 'Commerce & Dining',
     items: [
-      { href: '/dashboard/shop', label: 'Pro Shop', icon: ShoppingBag, devOwner: 'Dev 3' },
-      { href: '/dashboard/bar', label: 'Bar & Cafeteria', icon: Coffee, devOwner: 'Dev 3' },
+      { href: '/dashboard/shop', label: 'Pro Shop', icon: ShoppingBag },
+      { href: '/dashboard/bar', label: 'Bar & Cafeteria', icon: Coffee },
     ],
   },
 ];
@@ -135,9 +134,6 @@ export function DashboardSidebar({ userRole }: { userRole?: string }) {
                       <Icon className={cn('h-4 w-4', isActive ? 'text-emerald-400' : 'text-zinc-400 group-hover:text-zinc-200')} />
                       <span>{item.label}</span>
                     </div>
-                    <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800">
-                      {item.devOwner}
-                    </span>
                   </Link>
                 );
               })}
@@ -237,9 +233,6 @@ export function MobileSidebar({
                         <Icon className={cn('h-4 w-4', isActive ? 'text-emerald-400' : 'text-zinc-400')} />
                         <span>{item.label}</span>
                       </div>
-                      <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-500 border border-zinc-800">
-                        {item.devOwner}
-                      </span>
                     </Link>
                   );
                 })}
