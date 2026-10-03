@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle2 } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
+import { submitPublicEnquiryAction } from '@/actions/enquiries';
 
 export default function TrialBookingPage() {
   const [fullName, setFullName] = useState('');
@@ -25,18 +25,16 @@ export default function TrialBookingPage() {
     setError(null);
 
     try {
-      const supabase = createClient();
-      const { error: insertError } = await supabase.from('enquiries').insert({
-        full_name: fullName,
+      const result = await submitPublicEnquiryAction({
+        fullName,
         email,
         phone,
-        interested_sport: sport,
-        requested_trial_date: trialDate || null,
-        message: message || null,
-        status: 'NEW',
+        interestedSport: sport,
+        requestedTrialDate: trialDate || undefined,
+        message: message || undefined,
       });
 
-      if (insertError) throw insertError;
+      if (!result.success) throw new Error(result.error || 'Failed to submit');
 
       setIsSubmitted(true);
     } catch (err: unknown) {

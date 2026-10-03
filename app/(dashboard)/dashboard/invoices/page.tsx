@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { createClient } from '@/lib/supabase/server';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { InvoiceHeaderActions } from '@/components/dashboard/InvoiceHeaderActions';
 import { Receipt } from 'lucide-react';
 
 export default async function InvoicesDashboardPage() {
@@ -37,6 +38,7 @@ export default async function InvoicesDashboardPage() {
         'Aging report for unpaid and overdue invoices',
       ]}
     >
+      <InvoiceHeaderActions />
       <Card className="border-zinc-800 bg-zinc-900/50">
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <div>

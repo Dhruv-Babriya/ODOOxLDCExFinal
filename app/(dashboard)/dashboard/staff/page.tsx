@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { createClient } from '@/lib/supabase/server';
 import { formatDate } from '@/lib/utils';
+import { StaffHeaderActions } from '@/components/dashboard/StaffHeaderActions';
 import { UserCheck } from 'lucide-react';
 
 export default async function StaffDashboardPage() {
@@ -34,6 +35,7 @@ export default async function StaffDashboardPage() {
         'Employee leave request submission and manager approval / rejection workflow',
       ]}
     >
+      <StaffHeaderActions />
       <Card className="border-zinc-800 bg-zinc-900/50">
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <div>

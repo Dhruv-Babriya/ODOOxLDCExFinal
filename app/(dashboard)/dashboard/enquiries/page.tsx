@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { createClient } from '@/lib/supabase/server';
 import { formatDateTime } from '@/lib/utils';
+import { EnquiryHeaderActions } from '@/components/dashboard/EnquiryHeaderActions';
 import { MessageSquare } from 'lucide-react';
 
 export default async function EnquiriesDashboardPage() {
@@ -37,6 +38,7 @@ export default async function EnquiriesDashboardPage() {
         'One-click conversion of accepted quotes into member records',
       ]}
     >
+      <EnquiryHeaderActions />
       <Card className="border-zinc-800 bg-zinc-900/50">
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <div>

@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { createClient } from '@/lib/supabase/server';
 import { formatCurrency, formatDateTime } from '@/lib/utils';
+import { PaymentHeaderActions } from '@/components/dashboard/PaymentHeaderActions';
 import { CreditCard } from 'lucide-react';
 
 export default async function PaymentsDashboardPage() {
@@ -35,6 +36,7 @@ export default async function PaymentsDashboardPage() {
         'Daily revenue summary card categorized by sport, shop, and food & beverage',
       ]}
     >
+      <PaymentHeaderActions />
       <Card className="border-zinc-800 bg-zinc-900/50">
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <div>
