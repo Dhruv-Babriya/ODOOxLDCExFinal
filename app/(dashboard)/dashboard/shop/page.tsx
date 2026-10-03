@@ -11,8 +11,16 @@ export default async function ShopOrdersDashboardPage() {
   const user = await requireAuth();
   const supabase = await createClient();
 
-  // If authenticated user is a club MEMBER, present the full Member Pro Shop experience
-  if (user.role === 'MEMBER') {
+  const userRole = (user.role || '').toUpperCase();
+  const isMemberOrOwner =
+    userRole === 'MEMBER' ||
+    userRole === 'OWNER' ||
+    Boolean(user.memberId) ||
+    !['STAFF', 'ADMIN', 'MANAGER'].includes(userRole);
+
+  // If authenticated user is a club MEMBER (or OWNER), present the full Member Pro Shop experience
+  // without back-office cashier POS or inventory management controls.
+  if (isMemberOrOwner) {
     const { data: memberRecord } = await supabase
       .from('members')
       .select(`
@@ -243,6 +251,7 @@ export default async function ShopOrdersDashboardPage() {
         initialProducts={(products || []) as unknown as React.ComponentProps<typeof ShopPageClient>['initialProducts']}
         categories={categories || []}
         members={(members || []) as unknown as React.ComponentProps<typeof ShopPageClient>['members']}
+        userRole={user.role}
       />
     </DashboardModuleShell>
   );

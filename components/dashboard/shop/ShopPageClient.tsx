@@ -17,6 +17,8 @@ interface ShopPageClientProps {
   initialProducts: (Product & ShopOrderProduct)[];
   categories: Category[];
   members: ShopMember[];
+  userRole?: string;
+  isMemberPortal?: boolean;
 }
 
 export function ShopPageClient({
@@ -24,8 +26,17 @@ export function ShopPageClient({
   initialProducts,
   categories,
   members,
+  userRole,
+  isMemberPortal = false,
 }: ShopPageClientProps) {
   const [activeView, setActiveView] = useState<'ORDERS' | 'PRODUCTS' | 'PREVIEW'>('ORDERS');
+
+  const normalizedRole = (userRole || '').toUpperCase();
+  const isMemberOrOwner =
+    isMemberPortal ||
+    normalizedRole === 'MEMBER' ||
+    normalizedRole === 'OWNER' ||
+    (Boolean(userRole) && !['STAFF', 'ADMIN', 'MANAGER'].includes(normalizedRole));
 
   const portalProducts: PortalProduct[] = initialProducts.map((p) => ({
     id: p.id,
@@ -40,6 +51,19 @@ export function ShopPageClient({
     product_categories: p.product_categories,
     inventory: p.inventory,
   }));
+
+  // For members and within the member portal, completely omit the "Orders & Point of Sale (POS)"
+  // and "Product Catalog & Inventory" tabs, rendering purely the member storefront.
+  if (isMemberOrOwner) {
+    return (
+      <MemberProShop
+        products={portalProducts}
+        categories={categories}
+        member={members[0] || null}
+        isStandalonePage={true}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
