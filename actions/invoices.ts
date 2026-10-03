@@ -8,6 +8,7 @@ import {
 import { handleActionError } from '@/lib/errors';
 import { requirePermission } from '@/lib/auth/session';
 import type { ActionResult } from '@/types/shared';
+import type { Database } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
 
 /**
@@ -94,7 +95,7 @@ export async function updateInvoiceStatusAction(
 
     const { error } = await supabase
       .from('invoices')
-      .update({ status })
+      .update({ status: status as Database['public']['Enums']['app_invoice_status'] })
       .eq('id', invoiceId);
 
     if (error) throw error;

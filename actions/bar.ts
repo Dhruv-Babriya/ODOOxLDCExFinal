@@ -10,6 +10,7 @@ import {
   menuItemToggleAvailabilitySchema,
   customerTabOpenSchema,
   customerTabCloseSchema,
+  releaseBarTableSchema,
   barOrderCreateSchema,
   updateKitchenStatusSchema,
   updateBarOrderStatusSchema,
@@ -21,6 +22,7 @@ import {
   type MenuItemToggleAvailabilityInput,
   type CustomerTabOpenInput,
   type CustomerTabCloseInput,
+  type ReleaseBarTableInput,
   type BarOrderCreateInput,
   type UpdateKitchenStatusInput,
   type UpdateBarOrderStatusInput,
@@ -327,12 +329,22 @@ export async function closeCustomerTabAction(
     await requirePermission('tabs:manage');
     const supabase = await createClient();
 
-    // Invoke atomic close RPC which checks status, calculates total, and updates table
+    // Invoke atomic close RPC which checks status, unserved tickets, calculates total, and updates table
     const { data, error } = await supabase.rpc('close_customer_tab', {
       p_tab_id: validated.tabId,
+      p_force: validated.force,
     });
 
-    if (error) throw error;
+    if (error) {
+      if (error.message.includes('UNSERVED_KITCHEN_ORDERS') || (error as { code?: string }).code === 'P0003') {
+        throw new AppError(
+          'Tab has unserved kitchen orders currently being prepared. Mark them served or cancel them before settling, or force close.',
+          'BAD_REQUEST',
+          400
+        );
+      }
+      throw error;
+    }
 
     const outstandingAmount = Number(data);
 
@@ -342,6 +354,66 @@ export async function closeCustomerTabAction(
       success: true,
       data: { tabId: validated.tabId, outstandingAmount },
       message: `Tab closed. Total outstanding amount: ₹${outstandingAmount.toFixed(2)}. Ready for payment settlement.`,
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+/**
+ * Phase 2: Release a bar table back to AVAILABLE if no active tab or unpaid orders exist
+ */
+export async function releaseBarTableAction(
+  input: ReleaseBarTableInput
+): Promise<ActionResult<{ tableId: string }>> {
+  try {
+    const validated = releaseBarTableSchema.parse(input);
+    await requirePermission('bar_tables:manage');
+    const supabase = await createClient();
+
+    // Check if table has an open tab
+    const { data: openTab } = await supabase
+      .from('customer_tabs')
+      .select('id, tab_number')
+      .eq('table_id', validated.tableId)
+      .eq('status', 'OPEN')
+      .maybeSingle();
+
+    if (openTab) {
+      throw new AppError(
+        `Cannot release table. Customer tab ${openTab.tab_number || ''} is currently OPEN. Please close the tab first.`,
+        'BAD_REQUEST',
+        400
+      );
+    }
+
+    // Check table outstanding balance
+    const { data: balanceData } = await supabase.rpc('get_table_outstanding_balance', {
+      p_table_id: validated.tableId,
+    });
+
+    const balance = Number(balanceData || 0);
+    if (balance > 0) {
+      throw new AppError(
+        `Cannot release table with active unsettled orders (Outstanding: ₹${balance.toFixed(2)}).`,
+        'BAD_REQUEST',
+        400
+      );
+    }
+
+    const { error: updateErr } = await supabase
+      .from('bar_tables')
+      .update({ status: 'AVAILABLE' })
+      .eq('id', validated.tableId);
+
+    if (updateErr) throw updateErr;
+
+    revalidatePath('/dashboard/bar');
+
+    return {
+      success: true,
+      data: { tableId: validated.tableId },
+      message: 'Table released and marked AVAILABLE.',
     };
   } catch (err) {
     return handleActionError(err);
@@ -570,6 +642,197 @@ export async function updateBarOrderStatusAction(
       success: true,
       data: { orderId: validated.orderId, orderStatus: validated.orderStatus },
       message: `Order status updated to ${validated.orderStatus}.`,
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+/**
+ * Phase 2 Member Portal Integration: Retrieve bar orders for member view
+ */
+export async function getMemberBarOrdersAction(
+  targetMemberId?: string
+): Promise<ActionResult<Record<string, unknown>[]>> {
+  try {
+    const user = await requireAuth();
+    const supabase = await createClient();
+
+    let queryMemberId: string | null = null;
+    if (user.role === 'MEMBER') {
+      if (!user.memberId) return { success: true, data: [] };
+      queryMemberId = user.memberId;
+    } else {
+      queryMemberId = targetMemberId || null;
+    }
+
+    let query = supabase
+      .from('bar_orders')
+      .select(`
+        id,
+        order_number,
+        kitchen_status,
+        order_status,
+        subtotal,
+        discount_amount,
+        total_amount,
+        notes,
+        created_at,
+        bar_tables (table_number),
+        customer_tabs (tab_number),
+        bar_order_items (
+          id,
+          quantity,
+          unit_price,
+          total_price,
+          special_instructions,
+          menu_items (name)
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (queryMemberId) {
+      query = query.eq('member_id', queryMemberId);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return {
+      success: true,
+      data: (data || []) as unknown as Record<string, unknown>[],
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+interface MemberTabRecord {
+  id: string;
+  tab_number: string | null;
+  status: string;
+  credit_limit: number;
+  opened_at: string;
+  closed_at: string | null;
+  notes: string | null;
+  bar_tables: { table_number: string } | null;
+  bar_orders: Array<{
+    id: string;
+    order_number: string;
+    kitchen_status: string;
+    order_status: string;
+    total_amount: number;
+    created_at: string;
+  }>;
+}
+
+/**
+ * Phase 2 Member Portal Integration: Retrieve member's open and past tabs
+ */
+export async function getMemberTabsAction(
+  targetMemberId?: string
+): Promise<ActionResult<Record<string, unknown>[]>> {
+  try {
+    const user = await requireAuth();
+    const supabase = await createClient();
+
+    let queryMemberId: string | null = null;
+    if (user.role === 'MEMBER') {
+      if (!user.memberId) return { success: true, data: [] };
+      queryMemberId = user.memberId;
+    } else {
+      queryMemberId = targetMemberId || null;
+    }
+
+    let query = supabase
+      .from('customer_tabs')
+      .select(`
+        id,
+        tab_number,
+        status,
+        credit_limit,
+        opened_at,
+        closed_at,
+        notes,
+        bar_tables (table_number),
+        bar_orders (
+          id,
+          order_number,
+          kitchen_status,
+          order_status,
+          total_amount,
+          created_at
+        )
+      `)
+      .order('opened_at', { ascending: false });
+
+    if (queryMemberId) {
+      query = query.eq('member_id', queryMemberId);
+    }
+
+    const { data: tabs, error } = await query;
+    if (error) throw error;
+
+    // Calculate current running balance for each tab
+    const typedTabs = (tabs || []) as unknown as MemberTabRecord[];
+    const formattedTabs = typedTabs.map((t) => {
+      const activeBalance = (t.bar_orders || []).reduce((sum: number, o) => {
+        return o.order_status !== 'CANCELLED' ? sum + Number(o.total_amount) : sum;
+      }, 0);
+      return {
+        ...t,
+        currentBalance: activeBalance,
+      };
+    });
+
+    return {
+      success: true,
+      data: formattedTabs as unknown as Record<string, unknown>[],
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+/**
+ * Phase 2: Operational summary for Bar & Cafeteria staff dashboard
+ */
+export async function getBarOperationalSummaryAction(): Promise<
+  ActionResult<{
+    availableTables: number;
+    occupiedTables: number;
+    openTabs: number;
+    kitchenPending: number;
+    kitchenReady: number;
+  }>
+> {
+  try {
+    await requirePermission('bar:read_menu');
+    const supabase = await createClient();
+
+    const [
+      { count: availableTables },
+      { count: occupiedTables },
+      { count: openTabs },
+      { count: kitchenPending },
+      { count: kitchenReady },
+    ] = await Promise.all([
+      supabase.from('bar_tables').select('*', { count: 'exact', head: true }).eq('status', 'AVAILABLE'),
+      supabase.from('bar_tables').select('*', { count: 'exact', head: true }).eq('status', 'OCCUPIED'),
+      supabase.from('customer_tabs').select('*', { count: 'exact', head: true }).eq('status', 'OPEN'),
+      supabase.from('bar_orders').select('*', { count: 'exact', head: true }).in('kitchen_status', ['PENDING', 'PREPARING']),
+      supabase.from('bar_orders').select('*', { count: 'exact', head: true }).eq('kitchen_status', 'READY'),
+    ]);
+
+    return {
+      success: true,
+      data: {
+        availableTables: availableTables ?? 0,
+        occupiedTables: occupiedTables ?? 0,
+        openTabs: openTabs ?? 0,
+        kitchenPending: kitchenPending ?? 0,
+        kitchenReady: kitchenReady ?? 0,
+      },
     };
   } catch (err) {
     return handleActionError(err);

@@ -20,6 +20,8 @@ export default async function BookingsDashboardPage() {
     .from('court_bookings')
     .select(`
       id,
+      court_id,
+      member_id,
       booking_type,
       start_time,
       end_time,
@@ -32,7 +34,7 @@ export default async function BookingsDashboardPage() {
       notes,
       created_at,
       courts (name, sport_type),
-      members (membership_number, profiles (full_name))
+      members (profile_id, membership_number, profiles (full_name))
     `)
     .order('start_time', { ascending: false })
     .limit(50);
@@ -48,8 +50,10 @@ export default async function BookingsDashboardPage() {
 
   const bookingsList = (bookings || []).map((b) => ({
     id: b.id,
+    courtId: b.court_id,
     courtName: b.courts?.name || 'Unknown Court',
     sportType: b.courts?.sport_type || 'TENNIS',
+    memberId: b.member_id,
     memberName: b.members?.profiles?.full_name || null,
     membershipNumber: b.members?.membership_number || null,
     bookingType: b.booking_type,
@@ -63,6 +67,7 @@ export default async function BookingsDashboardPage() {
     cancelledAt: b.cancelled_at,
     notes: b.notes,
     createdAt: b.created_at,
+    isMine: (b.members as { profile_id?: string } | null)?.profile_id === user?.id,
   }));
 
   return (
@@ -70,9 +75,9 @@ export default async function BookingsDashboardPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Court Bookings</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-white">Court Bookings & Scheduling</h1>
           <p className="text-sm text-zinc-400 mt-1">
-            Interactive court reservations with 1-hour sessions, 30-minute intervals, and atomic collision prevention.
+            Real-world court scheduling with atomic concurrency, rescheduling, Friday social play, and daily quota limits.
           </p>
         </div>
         <Badge variant="success" className="text-[11px] self-start">
@@ -89,23 +94,25 @@ export default async function BookingsDashboardPage() {
             PostgreSQL GIST Exclusion Constraint Active
           </h4>
           <p className="text-xs text-zinc-300">
-            Double-bookings are physically impossible at the database engine level. Concurrent booking
+            Double-bookings are physically impossible at the database engine level. Concurrent booking and rescheduling
             requests are resolved atomically via the{' '}
             <code className="bg-zinc-900 px-1.5 py-0.5 rounded text-emerald-400 font-mono">
               no_overlapping_court_bookings
             </code>{' '}
-            exclusion constraint and the{' '}
+            exclusion constraint and the stored procedures{' '}
             <code className="bg-zinc-900 px-1.5 py-0.5 rounded text-emerald-400 font-mono">
               create_court_booking
             </code>{' '}
-            stored procedure.
+            and{' '}
+            <code className="bg-zinc-900 px-1.5 py-0.5 rounded text-emerald-400 font-mono">
+              reschedule_court_booking
+            </code>.
           </p>
         </div>
       </div>
 
       {/* Booking Calendar */}
       <section>
-        <h2 className="text-lg font-semibold text-white mb-4">Availability & New Booking</h2>
         <BookingCalendar
           courts={courtsList}
           userRole={user?.role || 'MEMBER'}
@@ -115,7 +122,7 @@ export default async function BookingsDashboardPage() {
 
       {/* Bookings List */}
       <section>
-        <h2 className="text-lg font-semibold text-white mb-4">Booking History</h2>
+        <h2 className="text-lg font-semibold text-white mb-4">Court Reservation Management</h2>
         <BookingsList
           initialBookings={bookingsList}
           courts={(courts || []).map((c) => ({ id: c.id, name: c.name }))}

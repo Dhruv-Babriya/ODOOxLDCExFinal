@@ -36,8 +36,8 @@ export function StaffForm({ onClose, onSuccess }: StaffFormProps) {
       employeeCode,
       department,
       position,
-      hourlyRate: hourlyRate ? parseFloat(hourlyRate) : undefined,
-      salaryMonthly: salaryMonthly ? parseFloat(salaryMonthly) : undefined,
+      hourlyRate: hourlyRate ? parseFloat(hourlyRate) : 0,
+      salaryMonthly: salaryMonthly ? parseFloat(salaryMonthly) : 0,
       hireDate,
       isActive,
     });

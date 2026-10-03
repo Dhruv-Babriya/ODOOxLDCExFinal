@@ -9,8 +9,9 @@ import { formatCurrency, formatDateTime } from '@/lib/utils';
 import {
   createShopOrderAction,
   cancelShopOrderAction,
-  updateShopOrderStatusAction,
+  updateShopOrderFulfillmentStatusAction,
 } from '@/actions/shop';
+import { FulfillmentStatus } from '@/types/shared';
 import {
   ShoppingBag,
   Plus,
@@ -22,6 +23,10 @@ import {
   Receipt,
   Eye,
   RotateCcw,
+  Clock,
+  AlertTriangle,
+  PackageCheck,
+  CheckCircle,
 } from 'lucide-react';
 
 export interface ShopOrderProduct {
@@ -59,6 +64,7 @@ export interface ShopOrder {
   member_id: string | null;
   order_channel: string;
   fulfillment_type: string;
+  fulfillment_status?: string;
   delivery_address: string | null;
   customer_name: string | null;
   customer_phone: string | null;
@@ -69,6 +75,11 @@ export interface ShopOrder {
   discount_amount: number;
   total_amount: number;
   created_at: string;
+  confirmed_at?: string | null;
+  ready_at?: string | null;
+  completed_at?: string | null;
+  cancelled_at?: string | null;
+  cancellation_reason?: string | null;
   members?: {
     membership_number: string;
     profiles?: { full_name: string; email: string; phone: string | null } | null;
@@ -85,7 +96,7 @@ export interface ShopOrdersManagerProps {
 
 export function ShopOrdersManager({ initialOrders, products, members }: ShopOrdersManagerProps) {
   const [orders, setOrders] = useState<ShopOrder[]>(initialOrders);
-  const [activeTab, setActiveTab] = useState<'ORDERS' | 'POS' | 'ONLINE_ORDER'>('ORDERS');
+  const [activeTab, setActiveTab] = useState<'ORDERS' | 'PICKUP_QUEUE' | 'DELIVERY_QUEUE' | 'POS' | 'ONLINE_ORDER'>('ORDERS');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [channelFilter, setChannelFilter] = useState<string>('ALL');
@@ -290,23 +301,48 @@ export function ShopOrdersManager({ initialOrders, products, members }: ShopOrde
     }
   };
 
-  // Mark Order as Completed
-  const handleCompleteOrder = async (orderId: string) => {
+  // Phase 2: Update Order Fulfillment Lifecycle State
+  const handleUpdateFulfillment = async (orderId: string, nextStatus: FulfillmentStatus) => {
     setIsLoading(true);
     setFeedback(null);
 
-    const res = await updateShopOrderStatusAction({
+    const res = await updateShopOrderFulfillmentStatusAction({
       orderId,
-      status: 'COMPLETED',
+      fulfillmentStatus: nextStatus,
     });
 
     setIsLoading(false);
 
     if (res.success) {
-      setFeedback({ type: 'success', message: 'Order marked as completed.' });
-      setOrders(orders.map((o) => (o.id === orderId ? { ...o, status: 'COMPLETED' } : o)));
+      setFeedback({ type: 'success', message: res.message || 'Fulfillment status updated.' });
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId
+            ? {
+                ...o,
+                fulfillment_status: res.data.fulfillmentStatus,
+                status: res.data.status,
+                ...(res.data.fulfillmentStatus === 'CONFIRMED' ? { confirmed_at: new Date().toISOString() } : {}),
+                ...(['READY_FOR_PICKUP', 'OUT_FOR_DELIVERY'].includes(res.data.fulfillmentStatus)
+                  ? { ready_at: new Date().toISOString() }
+                  : {}),
+                ...(['COLLECTED', 'DELIVERED', 'COMPLETED'].includes(res.data.fulfillmentStatus)
+                  ? { completed_at: new Date().toISOString() }
+                  : {}),
+              }
+            : o
+        )
+      );
       if (selectedOrder?.id === orderId) {
-        setSelectedOrder({ ...selectedOrder, status: 'COMPLETED' });
+        setSelectedOrder((prev) =>
+          prev
+            ? {
+                ...prev,
+                fulfillment_status: res.data.fulfillmentStatus,
+                status: res.data.status,
+              }
+            : null
+        );
       }
     } else {
       setFeedback({ type: 'error', message: res.error });
@@ -327,7 +363,7 @@ export function ShopOrdersManager({ initialOrders, products, members }: ShopOrde
     return matchesSearch && matchesStatus && matchesChannel;
   });
 
-  // Calculate Metrics
+  // Calculate Operational Metrics
   const processingCount = orders.filter((o) => o.status === 'PROCESSING').length;
   const completedCount = orders.filter((o) => o.status === 'COMPLETED').length;
   const cancelledCount = orders.filter((o) => o.status === 'CANCELLED').length;
@@ -335,31 +371,71 @@ export function ShopOrdersManager({ initialOrders, products, members }: ShopOrde
     .filter((o) => o.status !== 'CANCELLED')
     .reduce((sum, o) => sum + Number(o.total_amount), 0);
 
+  // Operational Queues
+  const lowStockProducts = products.filter(
+    (p) => (p.inventory?.quantity_on_hand ?? 0) <= p.low_stock_threshold
+  );
+  const pickupQueue = orders.filter(
+    (o) =>
+      o.fulfillment_type === 'PICKUP' &&
+      o.status !== 'CANCELLED' &&
+      !['COLLECTED', 'COMPLETED'].includes(o.fulfillment_status || '')
+  );
+  const deliveryQueue = orders.filter(
+    (o) =>
+      o.fulfillment_type === 'DELIVERY' &&
+      o.status !== 'CANCELLED' &&
+      !['DELIVERED', 'COMPLETED'].includes(o.fulfillment_status || '')
+  );
+
   return (
     <div className="space-y-6">
       {/* Metric Highlights */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <Card className="border-zinc-800 bg-zinc-900/60 p-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <Card className="border-zinc-800 bg-zinc-900/60 p-3.5">
           <div className="text-zinc-400 text-xs font-medium">Total Orders</div>
           <div className="text-2xl font-bold text-white mt-1">{orders.length}</div>
-          <div className="text-[11px] text-zinc-500 mt-0.5">{completedCount} fulfilled</div>
+          <div className="text-[11px] text-zinc-500 mt-0.5">{completedCount} fulfilled &bull; {processingCount} active &bull; {cancelledCount} void</div>
         </Card>
 
-        <Card className="border-zinc-800 bg-zinc-900/60 p-4">
-          <div className="text-zinc-400 text-xs font-medium">Processing / Pending</div>
-          <div className="text-2xl font-bold text-amber-400 mt-1">{processingCount}</div>
-          <div className="text-[11px] text-amber-500/70 mt-0.5">Awaiting pickup/dispatch</div>
+        <Card className={`border-zinc-800 p-3.5 transition-all ${
+          pickupQueue.length > 0 ? 'bg-emerald-950/20 border-emerald-900/50' : 'bg-zinc-900/60'
+        }`}>
+          <div className="text-zinc-400 text-xs font-medium flex items-center justify-between">
+            <span>Pickup Queue</span>
+            <Store className="h-3.5 w-3.5 text-emerald-400" />
+          </div>
+          <div className="text-2xl font-bold text-emerald-400 mt-1">{pickupQueue.length}</div>
+          <div className="text-[11px] text-zinc-500 mt-0.5">Awaiting collection</div>
         </Card>
 
-        <Card className="border-zinc-800 bg-zinc-900/60 p-4">
-          <div className="text-zinc-400 text-xs font-medium">Cancelled / Returned</div>
-          <div className="text-2xl font-bold text-rose-400 mt-1">{cancelledCount}</div>
-          <div className="text-[11px] text-zinc-500 mt-0.5">Stock fully restored</div>
+        <Card className={`border-zinc-800 p-3.5 transition-all ${
+          deliveryQueue.length > 0 ? 'bg-amber-950/20 border-amber-900/50' : 'bg-zinc-900/60'
+        }`}>
+          <div className="text-zinc-400 text-xs font-medium flex items-center justify-between">
+            <span>Delivery Queue</span>
+            <Truck className="h-3.5 w-3.5 text-amber-400" />
+          </div>
+          <div className="text-2xl font-bold text-amber-400 mt-1">{deliveryQueue.length}</div>
+          <div className="text-[11px] text-zinc-500 mt-0.5">Prep / In-transit</div>
         </Card>
 
-        <Card className="border-zinc-800 bg-zinc-900/60 p-4">
-          <div className="text-zinc-400 text-xs font-medium">Total Gross Revenue</div>
-          <div className="text-2xl font-bold text-emerald-400 mt-1">{formatCurrency(totalSalesRevenue)}</div>
+        <Card className={`border-zinc-800 p-3.5 transition-all ${
+          lowStockProducts.length > 0 ? 'bg-rose-950/20 border-rose-900/50' : 'bg-zinc-900/60'
+        }`}>
+          <div className="text-zinc-400 text-xs font-medium flex items-center justify-between">
+            <span>Low-Stock SKUs</span>
+            <AlertTriangle className={`h-3.5 w-3.5 ${lowStockProducts.length > 0 ? 'text-rose-400' : 'text-zinc-500'}`} />
+          </div>
+          <div className={`text-2xl font-bold mt-1 ${lowStockProducts.length > 0 ? 'text-rose-400' : 'text-zinc-300'}`}>
+            {lowStockProducts.length}
+          </div>
+          <div className="text-[11px] text-zinc-500 mt-0.5">&le; reorder threshold</div>
+        </Card>
+
+        <Card className="border-zinc-800 bg-zinc-900/60 p-3.5">
+          <div className="text-zinc-400 text-xs font-medium">Gross Revenue</div>
+          <div className="text-xl font-bold text-emerald-400 mt-1 truncate">{formatCurrency(totalSalesRevenue)}</div>
           <div className="text-[11px] text-zinc-500 mt-0.5">Excludes cancelled</div>
         </Card>
       </div>
@@ -380,10 +456,10 @@ export function ShopOrdersManager({ initialOrders, products, members }: ShopOrde
       )}
 
       {/* Mode Navigation Tabs */}
-      <div className="flex border-b border-zinc-800 gap-6">
+      <div className="flex border-b border-zinc-800 gap-6 overflow-x-auto">
         <button
           onClick={() => setActiveTab('ORDERS')}
-          className={`pb-3 text-xs font-semibold transition-colors relative cursor-pointer ${
+          className={`pb-3 text-xs font-semibold transition-colors relative cursor-pointer whitespace-nowrap ${
             activeTab === 'ORDERS' ? 'text-emerald-400' : 'text-zinc-400 hover:text-zinc-200'
           }`}
         >
@@ -394,12 +470,48 @@ export function ShopOrdersManager({ initialOrders, products, members }: ShopOrde
         </button>
 
         <button
+          onClick={() => setActiveTab('PICKUP_QUEUE')}
+          className={`pb-3 text-xs font-semibold transition-colors relative flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+            activeTab === 'PICKUP_QUEUE' ? 'text-emerald-400' : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          <Store className="h-3.5 w-3.5" />
+          <span>Pickup Queue</span>
+          {pickupQueue.length > 0 && (
+            <Badge variant="success" className="text-[10px] py-0 px-1.5">
+              {pickupQueue.length}
+            </Badge>
+          )}
+          {activeTab === 'PICKUP_QUEUE' && (
+            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500" />
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('DELIVERY_QUEUE')}
+          className={`pb-3 text-xs font-semibold transition-colors relative flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+            activeTab === 'DELIVERY_QUEUE' ? 'text-emerald-400' : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          <Truck className="h-3.5 w-3.5" />
+          <span>Delivery Queue</span>
+          {deliveryQueue.length > 0 && (
+            <Badge variant="warning" className="text-[10px] py-0 px-1.5">
+              {deliveryQueue.length}
+            </Badge>
+          )}
+          {activeTab === 'DELIVERY_QUEUE' && (
+            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500" />
+          )}
+        </button>
+
+        <button
           onClick={() => {
             clearCart();
             setFulfillmentType('PICKUP');
             setActiveTab('POS');
           }}
-          className={`pb-3 text-xs font-semibold transition-colors relative flex items-center gap-1.5 cursor-pointer ${
+          className={`pb-3 text-xs font-semibold transition-colors relative flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
             activeTab === 'POS' ? 'text-emerald-400' : 'text-zinc-400 hover:text-zinc-200'
           }`}
         >
@@ -415,17 +527,327 @@ export function ShopOrdersManager({ initialOrders, products, members }: ShopOrde
             clearCart();
             setActiveTab('ONLINE_ORDER');
           }}
-          className={`pb-3 text-xs font-semibold transition-colors relative flex items-center gap-1.5 cursor-pointer ${
+          className={`pb-3 text-xs font-semibold transition-colors relative flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
             activeTab === 'ONLINE_ORDER' ? 'text-emerald-400' : 'text-zinc-400 hover:text-zinc-200'
           }`}
         >
           <Truck className="h-3.5 w-3.5" />
-          <span>Pickup / Delivery Order Flow</span>
+          <span>Create Pickup / Delivery</span>
           {activeTab === 'ONLINE_ORDER' && (
             <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500" />
           )}
         </button>
       </div>
+
+      {/* TAB: PICKUP QUEUE */}
+      {activeTab === 'PICKUP_QUEUE' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Store className="h-4 w-4 text-emerald-400" />
+                <span>Shop Pickup Operations Queue</span>
+              </h3>
+              <p className="text-xs text-zinc-400">
+                Staff collection station: advance orders through Confirmed &rarr; Ready for Pickup &rarr; Collected.
+              </p>
+            </div>
+            <Badge variant="outline" className="text-xs">
+              {pickupQueue.length} Active Pickups
+            </Badge>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {pickupQueue.length > 0 ? (
+              pickupQueue.map((order) => {
+                const currentStatus = order.fulfillment_status || 'PENDING';
+                return (
+                  <Card key={order.id} className="border-zinc-800 bg-zinc-900/60 p-4 space-y-3 flex flex-col justify-between">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold text-emerald-400 text-sm">{order.order_number}</span>
+                        <Badge
+                          variant={
+                            currentStatus === 'READY_FOR_PICKUP'
+                              ? 'success'
+                              : currentStatus === 'CONFIRMED'
+                              ? 'outline'
+                              : 'warning'
+                          }
+                          className="text-[10px]"
+                        >
+                          {currentStatus.replace(/_/g, ' ')}
+                        </Badge>
+                      </div>
+
+                      <div>
+                        <div className="font-medium text-white text-xs">
+                          {order.members?.profiles?.full_name || order.customer_name || 'Walk-in Patron'}
+                        </div>
+                        {order.customer_phone && (
+                          <div className="text-[11px] text-zinc-400 font-mono">{order.customer_phone}</div>
+                        )}
+                        {order.members?.membership_plans && (
+                          <Badge variant="gold" className="text-[9px] py-0 px-1 mt-1">
+                            {order.members.membership_plans.tier} Member ({order.members.membership_plans.shop_discount_percent}% off)
+                          </Badge>
+                        )}
+                      </div>
+
+                      <div className="pt-2 border-t border-zinc-800/80 space-y-1">
+                        <div className="text-[10px] text-zinc-500 uppercase font-bold">Items</div>
+                        {order.shop_order_items?.map((item) => (
+                          <div key={item.id} className="flex justify-between text-xs text-zinc-300">
+                            <span>{item.products?.name || 'Item'}</span>
+                            <span className="font-mono font-bold text-white">x{item.quantity}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="pt-2 border-t border-zinc-800/80 flex justify-between items-baseline text-xs">
+                        <span className="text-zinc-400">Total:</span>
+                        <span className="font-mono font-bold text-emerald-400 text-sm">
+                          {formatCurrency(order.total_amount)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-zinc-800 space-y-2">
+                      {currentStatus === 'PENDING' && (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          className="w-full text-xs"
+                          isLoading={isLoading}
+                          onClick={() => handleUpdateFulfillment(order.id, 'CONFIRMED')}
+                        >
+                          <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                          <span>Confirm Order</span>
+                        </Button>
+                      )}
+
+                      {currentStatus === 'CONFIRMED' && (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          className="w-full text-xs bg-emerald-600 hover:bg-emerald-500"
+                          isLoading={isLoading}
+                          onClick={() => handleUpdateFulfillment(order.id, 'READY_FOR_PICKUP')}
+                        >
+                          <PackageCheck className="h-3.5 w-3.5 mr-1" />
+                          <span>Mark Ready for Pickup</span>
+                        </Button>
+                      )}
+
+                      {currentStatus === 'READY_FOR_PICKUP' && (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          className="w-full text-xs bg-emerald-500 hover:bg-emerald-400 text-black font-bold"
+                          isLoading={isLoading}
+                          onClick={() => handleUpdateFulfillment(order.id, 'COLLECTED')}
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                          <span>Mark Collected & Complete</span>
+                        </Button>
+                      )}
+
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 text-xs border-zinc-800"
+                          onClick={() => setSelectedOrder(order)}
+                        >
+                          <Eye className="h-3 w-3 mr-1" />
+                          <span>Details</span>
+                        </Button>
+
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          className="text-xs"
+                          isLoading={isLoading}
+                          onClick={() => handleCancelOrder(order.id)}
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })
+            ) : (
+              <div className="col-span-full text-center py-12 text-zinc-500 text-xs bg-zinc-900/30 rounded-xl border border-zinc-800">
+                <Store className="h-8 w-8 mx-auto mb-2 text-zinc-600" />
+                No orders currently waiting in the pickup queue.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB: DELIVERY QUEUE */}
+      {activeTab === 'DELIVERY_QUEUE' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Truck className="h-4 w-4 text-amber-400" />
+                <span>Home Delivery Dispatch Queue</span>
+              </h3>
+              <p className="text-xs text-zinc-400">
+                Packaging & dispatch station: advance orders through Confirmed &rarr; Preparing &rarr; Out for Delivery &rarr; Delivered.
+              </p>
+            </div>
+            <Badge variant="outline" className="text-xs">
+              {deliveryQueue.length} Active Deliveries
+            </Badge>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {deliveryQueue.length > 0 ? (
+              deliveryQueue.map((order) => {
+                const currentStatus = order.fulfillment_status || 'PENDING';
+                return (
+                  <Card key={order.id} className="border-zinc-800 bg-zinc-900/60 p-4 space-y-3 flex flex-col justify-between">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold text-amber-400 text-sm">{order.order_number}</span>
+                        <Badge
+                          variant={
+                            currentStatus === 'OUT_FOR_DELIVERY'
+                              ? 'success'
+                              : currentStatus === 'PREPARING'
+                              ? 'warning'
+                              : 'outline'
+                          }
+                          className="text-[10px]"
+                        >
+                          {currentStatus.replace(/_/g, ' ')}
+                        </Badge>
+                      </div>
+
+                      <div>
+                        <div className="font-medium text-white text-xs">
+                          {order.members?.profiles?.full_name || order.customer_name || 'Customer'}
+                        </div>
+                        {order.customer_phone && (
+                          <div className="text-[11px] text-zinc-400 font-mono">{order.customer_phone}</div>
+                        )}
+                        {order.delivery_address && (
+                          <div className="mt-1.5 p-2 rounded bg-zinc-950/80 border border-zinc-800 text-[11px] text-zinc-300">
+                            <span className="text-[10px] text-zinc-500 font-bold uppercase block mb-0.5">Delivery Address:</span>
+                            {order.delivery_address}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="pt-2 border-t border-zinc-800/80 space-y-1">
+                        <div className="text-[10px] text-zinc-500 uppercase font-bold">Items</div>
+                        {order.shop_order_items?.map((item) => (
+                          <div key={item.id} className="flex justify-between text-xs text-zinc-300">
+                            <span>{item.products?.name || 'Item'}</span>
+                            <span className="font-mono font-bold text-white">x{item.quantity}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="pt-2 border-t border-zinc-800/80 flex justify-between items-baseline text-xs">
+                        <span className="text-zinc-400">Total:</span>
+                        <span className="font-mono font-bold text-emerald-400 text-sm">
+                          {formatCurrency(order.total_amount)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-zinc-800 space-y-2">
+                      {currentStatus === 'PENDING' && (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          className="w-full text-xs"
+                          isLoading={isLoading}
+                          onClick={() => handleUpdateFulfillment(order.id, 'CONFIRMED')}
+                        >
+                          <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                          <span>Confirm Order</span>
+                        </Button>
+                      )}
+
+                      {currentStatus === 'CONFIRMED' && (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          className="w-full text-xs bg-amber-600 hover:bg-amber-500 text-white"
+                          isLoading={isLoading}
+                          onClick={() => handleUpdateFulfillment(order.id, 'PREPARING')}
+                        >
+                          <Clock className="h-3.5 w-3.5 mr-1" />
+                          <span>Start Preparing</span>
+                        </Button>
+                      )}
+
+                      {currentStatus === 'PREPARING' && (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          className="w-full text-xs bg-emerald-600 hover:bg-emerald-500"
+                          isLoading={isLoading}
+                          onClick={() => handleUpdateFulfillment(order.id, 'OUT_FOR_DELIVERY')}
+                        >
+                          <Truck className="h-3.5 w-3.5 mr-1" />
+                          <span>Dispatch / Out for Delivery</span>
+                        </Button>
+                      )}
+
+                      {currentStatus === 'OUT_FOR_DELIVERY' && (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          className="w-full text-xs bg-emerald-500 hover:bg-emerald-400 text-black font-bold"
+                          isLoading={isLoading}
+                          onClick={() => handleUpdateFulfillment(order.id, 'DELIVERED')}
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                          <span>Mark Delivered & Complete</span>
+                        </Button>
+                      )}
+
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 text-xs border-zinc-800"
+                          onClick={() => setSelectedOrder(order)}
+                        >
+                          <Eye className="h-3 w-3 mr-1" />
+                          <span>Details</span>
+                        </Button>
+
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          className="text-xs"
+                          isLoading={isLoading}
+                          onClick={() => handleCancelOrder(order.id)}
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })
+            ) : (
+              <div className="col-span-full text-center py-12 text-zinc-500 text-xs bg-zinc-900/30 rounded-xl border border-zinc-800">
+                <Truck className="h-8 w-8 mx-auto mb-2 text-zinc-600" />
+                No orders currently waiting in the delivery queue.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* TAB 1: ORDERS REGISTER */}
       {activeTab === 'ORDERS' && (
@@ -530,18 +952,25 @@ export function ShopOrdersManager({ initialOrders, products, members }: ShopOrde
                             </div>
                           </td>
                           <td className="py-2.5 px-3 font-sans">
-                            <Badge
-                              variant={
-                                o.status === 'COMPLETED'
-                                  ? 'success'
-                                  : o.status === 'CANCELLED'
-                                  ? 'destructive'
-                                  : 'warning'
-                              }
-                              className="text-[10px]"
-                            >
-                              {o.status}
-                            </Badge>
+                            <div className="flex flex-col gap-1 items-start">
+                              <Badge
+                                variant={
+                                  o.status === 'COMPLETED'
+                                    ? 'success'
+                                    : o.status === 'CANCELLED'
+                                    ? 'destructive'
+                                    : 'warning'
+                                }
+                                className="text-[10px]"
+                              >
+                                {o.status}
+                              </Badge>
+                              {o.fulfillment_status && (
+                                <span className="text-[9px] font-mono text-zinc-400">
+                                  {o.fulfillment_status.replace(/_/g, ' ')}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-2.5 px-3 text-white font-bold">{formatCurrency(o.total_amount)}</td>
                           <td className="py-2.5 px-3 text-zinc-400 font-sans">{formatDateTime(o.created_at)}</td>
@@ -903,21 +1332,84 @@ export function ShopOrdersManager({ initialOrders, products, members }: ShopOrde
                 </div>
               </div>
 
-              {/* Status Banner */}
-              <div className="flex items-center justify-between p-3 rounded-lg bg-zinc-950/80 border border-zinc-800">
-                <span className="text-zinc-400">Order Processing Status:</span>
-                <Badge
-                  variant={
-                    selectedOrder.status === 'COMPLETED'
-                      ? 'success'
-                      : selectedOrder.status === 'CANCELLED'
-                      ? 'destructive'
-                      : 'warning'
-                  }
-                  className="text-xs"
-                >
-                  {selectedOrder.status}
-                </Badge>
+              {/* Status & Lifecycle Timeline Banner */}
+              <div className="space-y-3 p-3 rounded-lg bg-zinc-950/80 border border-zinc-800">
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-400">Order Processing Status:</span>
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant={
+                        selectedOrder.status === 'COMPLETED'
+                          ? 'success'
+                          : selectedOrder.status === 'CANCELLED'
+                          ? 'destructive'
+                          : 'warning'
+                      }
+                      className="text-xs"
+                    >
+                      {selectedOrder.status}
+                    </Badge>
+                    {selectedOrder.fulfillment_status && (
+                      <Badge variant="outline" className="text-xs text-emerald-400 border-emerald-800">
+                        {selectedOrder.fulfillment_status.replace(/_/g, ' ')}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                {/* Timeline Progress */}
+                <div className="pt-2 border-t border-zinc-800/80 grid grid-cols-4 gap-2 text-[10px]">
+                  <div className={`p-2 rounded border ${selectedOrder.created_at ? 'bg-emerald-950/40 border-emerald-900/60 text-emerald-300' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`}>
+                    <div className="font-bold flex items-center gap-1">
+                      <Clock className="h-2.5 w-2.5" />
+                      <span>1. Placed</span>
+                    </div>
+                    <div className="text-[9px] opacity-75 mt-0.5">{formatDateTime(selectedOrder.created_at)}</div>
+                  </div>
+
+                  <div className={`p-2 rounded border ${selectedOrder.confirmed_at ? 'bg-emerald-950/40 border-emerald-900/60 text-emerald-300' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`}>
+                    <div className="font-bold flex items-center gap-1">
+                      <CheckCircle className="h-2.5 w-2.5" />
+                      <span>2. Confirmed</span>
+                    </div>
+                    <div className="text-[9px] opacity-75 mt-0.5">
+                      {selectedOrder.confirmed_at ? formatDateTime(selectedOrder.confirmed_at) : 'Pending'}
+                    </div>
+                  </div>
+
+                  <div className={`p-2 rounded border ${selectedOrder.ready_at ? 'bg-emerald-950/40 border-emerald-900/60 text-emerald-300' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`}>
+                    <div className="font-bold flex items-center gap-1">
+                      <PackageCheck className="h-2.5 w-2.5" />
+                      <span>{selectedOrder.fulfillment_type === 'DELIVERY' ? '3. Dispatched' : '3. Ready'}</span>
+                    </div>
+                    <div className="text-[9px] opacity-75 mt-0.5">
+                      {selectedOrder.ready_at ? formatDateTime(selectedOrder.ready_at) : 'Pending'}
+                    </div>
+                  </div>
+
+                  <div className={`p-2 rounded border ${selectedOrder.completed_at ? 'bg-emerald-950/40 border-emerald-900/60 text-emerald-300' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`}>
+                    <div className="font-bold flex items-center gap-1">
+                      <CheckCircle2 className="h-2.5 w-2.5" />
+                      <span>{selectedOrder.fulfillment_type === 'DELIVERY' ? '4. Delivered' : '4. Collected'}</span>
+                    </div>
+                    <div className="text-[9px] opacity-75 mt-0.5">
+                      {selectedOrder.completed_at ? formatDateTime(selectedOrder.completed_at) : 'Pending'}
+                    </div>
+                  </div>
+                </div>
+
+                {selectedOrder.cancelled_at && (
+                  <div className="p-2.5 rounded bg-rose-950/40 border border-rose-900/60 text-rose-300 text-xs">
+                    <div className="font-bold flex items-center gap-1">
+                      <RotateCcw className="h-3 w-3" />
+                      <span>Order Cancelled & Stock Restored</span>
+                    </div>
+                    <div className="text-[11px] text-rose-400/90 mt-0.5">
+                      {formatDateTime(selectedOrder.cancelled_at)}
+                      {selectedOrder.cancellation_reason && ` — ${selectedOrder.cancellation_reason}`}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Order Items Table */}
@@ -987,7 +1479,7 @@ export function ShopOrdersManager({ initialOrders, products, members }: ShopOrde
               {/* Actions Footer */}
               <div className="flex justify-between items-center pt-3 border-t border-zinc-800">
                 <div>
-                  {selectedOrder.status !== 'CANCELLED' && (
+                  {selectedOrder.status !== 'CANCELLED' && selectedOrder.status !== 'COMPLETED' && (
                     <Button
                       variant="danger"
                       size="sm"
@@ -1002,17 +1494,105 @@ export function ShopOrdersManager({ initialOrders, products, members }: ShopOrde
                 </div>
 
                 <div className="flex gap-2">
-                  {selectedOrder.status === 'PROCESSING' && (
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      isLoading={isLoading}
-                      onClick={() => handleCompleteOrder(selectedOrder.id)}
-                      className="gap-1.5 text-xs"
-                    >
-                      <CheckCircle2 className="h-3 w-3" />
-                      <span>Mark as Completed</span>
-                    </Button>
+                  {/* Contextual Next Step Button */}
+                  {selectedOrder.status !== 'CANCELLED' && selectedOrder.status !== 'COMPLETED' && (
+                    <>
+                      {/* Pickup Flow */}
+                      {selectedOrder.fulfillment_type === 'PICKUP' && (
+                        <>
+                          {(!selectedOrder.fulfillment_status || selectedOrder.fulfillment_status === 'PENDING') && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              isLoading={isLoading}
+                              onClick={() => handleUpdateFulfillment(selectedOrder.id, 'CONFIRMED')}
+                              className="gap-1 text-xs"
+                            >
+                              <CheckCircle className="h-3.5 w-3.5" />
+                              <span>Confirm Order</span>
+                            </Button>
+                          )}
+                          {selectedOrder.fulfillment_status === 'CONFIRMED' && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              isLoading={isLoading}
+                              onClick={() => handleUpdateFulfillment(selectedOrder.id, 'READY_FOR_PICKUP')}
+                              className="gap-1 text-xs bg-emerald-600 hover:bg-emerald-500"
+                            >
+                              <PackageCheck className="h-3.5 w-3.5" />
+                              <span>Ready for Pickup</span>
+                            </Button>
+                          )}
+                          {selectedOrder.fulfillment_status === 'READY_FOR_PICKUP' && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              isLoading={isLoading}
+                              onClick={() => handleUpdateFulfillment(selectedOrder.id, 'COLLECTED')}
+                              className="gap-1 text-xs bg-emerald-500 hover:bg-emerald-400 text-black font-bold"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              <span>Mark Collected & Complete</span>
+                            </Button>
+                          )}
+                        </>
+                      )}
+
+                      {/* Delivery Flow */}
+                      {selectedOrder.fulfillment_type === 'DELIVERY' && (
+                        <>
+                          {(!selectedOrder.fulfillment_status || selectedOrder.fulfillment_status === 'PENDING') && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              isLoading={isLoading}
+                              onClick={() => handleUpdateFulfillment(selectedOrder.id, 'CONFIRMED')}
+                              className="gap-1 text-xs"
+                            >
+                              <CheckCircle className="h-3.5 w-3.5" />
+                              <span>Confirm Order</span>
+                            </Button>
+                          )}
+                          {selectedOrder.fulfillment_status === 'CONFIRMED' && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              isLoading={isLoading}
+                              onClick={() => handleUpdateFulfillment(selectedOrder.id, 'PREPARING')}
+                              className="gap-1 text-xs bg-amber-600 hover:bg-amber-500 text-white"
+                            >
+                              <Clock className="h-3.5 w-3.5" />
+                              <span>Start Preparing</span>
+                            </Button>
+                          )}
+                          {selectedOrder.fulfillment_status === 'PREPARING' && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              isLoading={isLoading}
+                              onClick={() => handleUpdateFulfillment(selectedOrder.id, 'OUT_FOR_DELIVERY')}
+                              className="gap-1 text-xs bg-emerald-600 hover:bg-emerald-500"
+                            >
+                              <Truck className="h-3.5 w-3.5" />
+                              <span>Dispatch / Out for Delivery</span>
+                            </Button>
+                          )}
+                          {selectedOrder.fulfillment_status === 'OUT_FOR_DELIVERY' && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              isLoading={isLoading}
+                              onClick={() => handleUpdateFulfillment(selectedOrder.id, 'DELIVERED')}
+                              className="gap-1 text-xs bg-emerald-500 hover:bg-emerald-400 text-black font-bold"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              <span>Mark Delivered & Complete</span>
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </>
                   )}
 
                   <Button

@@ -35,7 +35,7 @@ export function LeaveForm({ onClose, onSuccess, defaultStaffId }: LeaveFormProps
       leaveType: leaveType as 'SICK' | 'VACATION' | 'PERSONAL' | 'UNPAID',
       startDate,
       endDate,
-      reason: reason || undefined,
+      reason: reason || 'Leave request',
     });
 
     setIsSubmitting(false);

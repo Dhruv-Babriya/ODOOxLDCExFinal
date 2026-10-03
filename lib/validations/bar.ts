@@ -75,9 +75,16 @@ export type CustomerTabOpenInput = z.infer<typeof customerTabOpenSchema>;
 
 export const customerTabCloseSchema = z.object({
   tabId: z.string().uuid('Invalid tab ID'),
+  force: z.boolean().default(false),
 });
 
 export type CustomerTabCloseInput = z.infer<typeof customerTabCloseSchema>;
+
+export const releaseBarTableSchema = z.object({
+  tableId: z.string().uuid('Invalid table ID'),
+});
+
+export type ReleaseBarTableInput = z.infer<typeof releaseBarTableSchema>;
 
 export const barOrderItemSchema = z.object({
   menuItemId: z.string().uuid('Invalid menu item ID'),

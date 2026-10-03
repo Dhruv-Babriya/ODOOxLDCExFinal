@@ -12,6 +12,7 @@ import {
 import { handleActionError } from '@/lib/errors';
 import { requirePermission, requireAuth } from '@/lib/auth/session';
 import type { ActionResult } from '@/types/shared';
+import type { Database } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
 
 // ---------------------------------------------------------------------------
@@ -34,7 +35,7 @@ export async function createStaffAction(
       .insert({
         profile_id: validated.profileId,
         employee_code: validated.employeeCode,
-        department: validated.department,
+        department: validated.department as Database['public']['Enums']['app_department'],
         position: validated.position,
         hourly_rate: validated.hourlyRate,
         salary_monthly: validated.salaryMonthly,
@@ -64,8 +65,8 @@ export async function updateStaffAction(
     await requirePermission('staff:manage');
     const supabase = await createClient();
 
-    const updateData: Record<string, unknown> = {};
-    if (input.department) updateData.department = input.department;
+    const updateData: Database['public']['Tables']['staff']['Update'] = {};
+    if (input.department) updateData.department = input.department as Database['public']['Enums']['app_department'];
     if (input.position) updateData.position = input.position;
     if (input.hourlyRate !== undefined) updateData.hourly_rate = input.hourlyRate;
     if (input.salaryMonthly !== undefined) updateData.salary_monthly = input.salaryMonthly;
@@ -107,7 +108,7 @@ export async function createShiftAction(
         shift_date: validated.shiftDate,
         start_time: validated.startTime,
         end_time: validated.endTime,
-        status: validated.status,
+        status: validated.status as Database['public']['Enums']['app_shift_status'],
         notes: validated.notes || null,
       })
       .select('id')
@@ -135,7 +136,7 @@ export async function updateShiftStatusAction(
 
     const { error } = await supabase
       .from('staff_shifts')
-      .update({ status })
+      .update({ status: status as Database['public']['Enums']['app_shift_status'] })
       .eq('id', shiftId);
 
     if (error) throw error;
@@ -166,7 +167,7 @@ export async function submitLeaveRequestAction(
       .from('leave_requests')
       .insert({
         staff_id: validated.staffId,
-        leave_type: validated.leaveType,
+        leave_type: validated.leaveType as Database['public']['Enums']['app_leave_type'],
         start_date: validated.startDate,
         end_date: validated.endDate,
         reason: validated.reason,

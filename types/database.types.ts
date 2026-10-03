@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          is_read: boolean
+          link: string | null
+          message: string
+          read_at: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          link?: string | null
+          message: string
+          read_at?: string | null
+          title: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          link?: string | null
+          message?: string
+          read_at?: string | null
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: string
@@ -1270,6 +1314,10 @@ export type Database = {
       }
       shop_orders: {
         Row: {
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          completed_at: string | null
+          confirmed_at: string | null
           created_at: string
           created_by: string | null
           customer_email: string | null
@@ -1277,18 +1325,24 @@ export type Database = {
           customer_phone: string | null
           delivery_address: string | null
           discount_amount: number
+          fulfillment_status: string
           fulfillment_type: string
           id: string
           member_id: string | null
           notes: string | null
           order_channel: Database["public"]["Enums"]["app_order_channel"]
           order_number: string
+          ready_at: string | null
           status: Database["public"]["Enums"]["app_order_status"]
           subtotal: number
           total_amount: number
           updated_at: string
         }
         Insert: {
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          completed_at?: string | null
+          confirmed_at?: string | null
           created_at?: string
           created_by?: string | null
           customer_email?: string | null
@@ -1296,18 +1350,24 @@ export type Database = {
           customer_phone?: string | null
           delivery_address?: string | null
           discount_amount?: number
+          fulfillment_status?: string
           fulfillment_type?: string
           id?: string
           member_id?: string | null
           notes?: string | null
           order_channel?: Database["public"]["Enums"]["app_order_channel"]
           order_number: string
+          ready_at?: string | null
           status?: Database["public"]["Enums"]["app_order_status"]
           subtotal?: number
           total_amount?: number
           updated_at?: string
         }
         Update: {
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          completed_at?: string | null
+          confirmed_at?: string | null
           created_at?: string
           created_by?: string | null
           customer_email?: string | null
@@ -1315,12 +1375,14 @@ export type Database = {
           customer_phone?: string | null
           delivery_address?: string | null
           discount_amount?: number
+          fulfillment_status?: string
           fulfillment_type?: string
           id?: string
           member_id?: string | null
           notes?: string | null
           order_channel?: Database["public"]["Enums"]["app_order_channel"]
           order_number?: string
+          ready_at?: string | null
           status?: Database["public"]["Enums"]["app_order_status"]
           subtotal?: number
           total_amount?: number
@@ -1456,6 +1518,50 @@ export type Database = {
         }
         Returns: string
       }
+      reschedule_court_booking: {
+        Args: {
+          p_booking_id: string
+          p_new_base_price: number
+          p_new_court_id: string
+          p_new_discount_amount: number
+          p_new_end_time: string
+          p_new_final_price: number
+          p_new_start_time: string
+          p_notes?: string | null
+        }
+        Returns: string
+      }
+      add_booking_participant: {
+        Args: {
+          p_booking_id: string
+          p_guest_name?: string | null
+          p_member_id?: string | null
+        }
+        Returns: string
+      }
+      remove_booking_participant: {
+        Args: {
+          p_participant_id: string
+        }
+        Returns: boolean
+      }
+      record_booking_payment: {
+        Args: {
+          p_amount: number
+          p_booking_id: string
+          p_member_id: string | null
+          p_payment_method: Database["public"]["Enums"]["app_payment_method"]
+          p_transaction_reference?: string | null
+        }
+        Returns: string
+      }
+      cancel_court_booking: {
+        Args: {
+          p_booking_id: string
+          p_reason: string
+        }
+        Returns: boolean
+      }
       adjust_inventory: {
         Args: {
           p_notes?: string | null
@@ -1475,9 +1581,30 @@ export type Database = {
       }
       close_customer_tab: {
         Args: {
+          p_force?: boolean
           p_tab_id: string
         }
         Returns: number
+      }
+      check_tab_has_unserved_orders: {
+        Args: {
+          p_tab_id: string
+        }
+        Returns: number
+      }
+      get_table_outstanding_balance: {
+        Args: {
+          p_table_id: string
+        }
+        Returns: number
+      }
+      update_shop_order_fulfillment: {
+        Args: {
+          p_new_fulfillment_status: string
+          p_notes?: string | null
+          p_order_id: string
+        }
+        Returns: undefined
       }
       deduct_inventory: {
         Args: {
