@@ -33,9 +33,10 @@ import {
 interface MemberManagementViewProps {
   initialMembers: MemberWithDetails[];
   plans: MembershipPlanItem[];
+  isOwner?: boolean;
 }
 
-export function MemberManagementView({ initialMembers, plans }: MemberManagementViewProps) {
+export function MemberManagementView({ initialMembers, plans, isOwner }: MemberManagementViewProps) {
   const members = initialMembers;
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -415,6 +416,11 @@ export function MemberManagementView({ initialMembers, plans }: MemberManagement
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {isOwner && (
+              <Badge variant="success" className="text-[10px] font-semibold tracking-wide">
+                Owner Portal
+              </Badge>
+            )}
             <Badge variant="outline" className="text-xs font-mono">
               Page {safePage} of {totalPages}
             </Badge>

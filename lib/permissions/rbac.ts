@@ -51,6 +51,8 @@ export type Permission =
 
 export const ROLE_PERMISSIONS: Record<AppRole, readonly Permission[]> = {
   OWNER: [
+    'members:read',
+    'members:manage',
     'reports:view',
     'invoices:read',
     'membership_plans:read',

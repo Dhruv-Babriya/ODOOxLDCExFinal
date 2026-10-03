@@ -36,7 +36,6 @@ const SIDEBAR_SECTIONS: { title: string; items: SidebarItem[] }[] = [
     items: [
       { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
       { href: '/dashboard/portal', label: 'Member Portal', icon: Sparkles },
-      { href: '/dashboard/members', label: 'Members', icon: Users },
       { href: '/dashboard/membership-plans', label: 'Plans & Pricing', icon: Shield },
       { href: '/dashboard/profile', label: 'User Profile', icon: User },
     ],
@@ -97,6 +96,7 @@ const OWNER_SIDEBAR_SECTIONS: { title: string; items: SidebarItem[] }[] = [
     title: 'Executive Governance',
     items: [
       { href: '/dashboard', label: 'Executive Overview', icon: LayoutDashboard },
+      { href: '/dashboard/members', label: 'Member Directory', icon: Users },
       { href: '/dashboard/reports', label: 'Revenue & Analytics', icon: BarChart3 },
       { href: '/dashboard/membership-plans', label: 'Plans & Pricing', icon: Shield },
       { href: '/dashboard/managers', label: 'Club Managers', icon: UserCheck },

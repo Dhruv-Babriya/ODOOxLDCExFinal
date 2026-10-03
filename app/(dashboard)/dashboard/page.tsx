@@ -2,6 +2,10 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth/session';
+import { getMembersAction } from '@/actions/members';
+import { getMembershipPlansAction } from '@/actions/plans';
+import { MemberManagementView } from '@/components/dashboard/MemberManagementView';
+import type { MemberWithDetails, MembershipPlanItem } from '@/types/shared';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,6 +26,17 @@ import {
 } from 'lucide-react';
 
 const OWNER_MODULES = [
+  {
+    title: 'Member Directory & Paging',
+    tag: 'Executive Roster',
+    href: '/dashboard/members',
+    icon: Users,
+    color: 'text-emerald-400',
+    description: 'Executive member directory with 20-per-page pagination, type of membership, start/end dates, and live filters.',
+    actions: [
+      { label: 'View Member Directory', href: '/dashboard/members' },
+    ],
+  },
   {
     title: 'Club Revenue & Analytics',
     tag: 'Financial Performance',
@@ -140,6 +155,18 @@ export default async function DashboardOverviewPage() {
   const isOwner = user?.role === 'OWNER';
   const modules = isOwner ? OWNER_MODULES : CLUB_MODULES;
 
+  let ownerMembers: MemberWithDetails[] = [];
+  let ownerPlans: MembershipPlanItem[] = [];
+
+  if (isOwner) {
+    const [membersRes, plansRes] = await Promise.all([
+      getMembersAction(),
+      getMembershipPlansAction(),
+    ]);
+    if (membersRes.success) ownerMembers = membersRes.data;
+    if (plansRes.success) ownerPlans = plansRes.data;
+  }
+
   return (
     <div className="space-y-8">
       {/* Welcome Banner */}
@@ -155,7 +182,7 @@ export default async function DashboardOverviewPage() {
           </div>
           <p className="text-sm text-zinc-400 mt-1">
             {isOwner
-              ? `Welcome back, ${user?.fullName || 'Club Owner'}. Executive oversight of club revenue, plans & pricing, and General Managers.`
+              ? `Welcome back, ${user?.fullName || 'Club Owner'}. Executive oversight of club revenue, members directory, plans & pricing, and General Managers.`
               : `Welcome back, ${user?.fullName || 'Club Administrator'}. All facility modules and operational departments are active.`}
           </p>
         </div>
@@ -163,8 +190,14 @@ export default async function DashboardOverviewPage() {
         <div className="flex flex-wrap items-center gap-3">
           {isOwner ? (
             <>
-              <Link href="/dashboard/reports">
+              <Link href="/dashboard/members">
                 <Button variant="primary" size="sm" className="gap-2 shadow-lg shadow-emerald-950/40">
+                  <Users className="h-4 w-4" />
+                  <span>Member Directory</span>
+                </Button>
+              </Link>
+              <Link href="/dashboard/reports">
+                <Button variant="outline" size="sm" className="gap-2 border-zinc-700">
                   <BarChart3 className="h-4 w-4" />
                   <span>Revenue Analytics</span>
                 </Button>
@@ -322,6 +355,35 @@ export default async function DashboardOverviewPage() {
           })}
         </div>
       </div>
+
+      {/* Exclusively in the Owner Portal: Member Directory with Pagination & Filters */}
+      {isOwner && (
+        <div className="space-y-4 pt-6 border-t border-zinc-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-bold text-white tracking-tight">
+                  Enrolled Members Directory
+                </h2>
+                <Badge variant="success" className="text-[10px]">
+                  Owner Portal Only
+                </Badge>
+              </div>
+              <p className="text-xs text-zinc-400 mt-1">
+                Executive member roster with 20-per-page pagination, type of membership, starting & ending dates, and live filters.
+              </p>
+            </div>
+            <Link href="/dashboard/members">
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs border-zinc-700">
+                <span>Dedicated Full View</span>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          </div>
+
+          <MemberManagementView initialMembers={ownerMembers} plans={ownerPlans} isOwner={true} />
+        </div>
+      )}
     </div>
   );
 }
