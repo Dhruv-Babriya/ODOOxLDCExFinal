@@ -93,9 +93,27 @@ const MEMBER_SIDEBAR_SECTIONS: { title: string; items: SidebarItem[] }[] = [
   },
 ];
 
+const OWNER_SIDEBAR_SECTIONS: { title: string; items: SidebarItem[] }[] = [
+  {
+    title: 'Executive Governance',
+    items: [
+      { href: '/dashboard', label: 'Executive Overview', icon: LayoutDashboard },
+      { href: '/dashboard/reports', label: 'Revenue & Analytics', icon: BarChart3 },
+      { href: '/dashboard/membership-plans', label: 'Plans & Pricing', icon: Shield },
+      { href: '/dashboard/managers', label: 'Club Managers', icon: UserCheck },
+      { href: '/dashboard/profile', label: 'Owner Profile', icon: User },
+    ],
+  },
+];
+
 export function DashboardSidebar({ userRole }: { userRole?: string }) {
   const pathname = usePathname();
-  const sections = userRole === 'MEMBER' ? MEMBER_SIDEBAR_SECTIONS : SIDEBAR_SECTIONS;
+  const sections =
+    userRole === 'OWNER'
+      ? OWNER_SIDEBAR_SECTIONS
+      : userRole === 'MEMBER'
+      ? MEMBER_SIDEBAR_SECTIONS
+      : SIDEBAR_SECTIONS;
 
   return (
     <aside className="hidden md:flex w-64 border-r border-zinc-800 bg-zinc-950 flex-col shrink-0 h-screen sticky top-0 overflow-y-auto">

@@ -16,7 +16,46 @@ import {
   PlusCircle,
   Clock,
   Sparkles,
+  Shield,
+  UserCheck,
+  DollarSign,
 } from 'lucide-react';
+
+const OWNER_MODULES = [
+  {
+    title: 'Club Revenue & Analytics',
+    tag: 'Financial Performance',
+    href: '/dashboard/reports',
+    icon: BarChart3,
+    color: 'text-emerald-400',
+    description: 'Consolidated income across court bookings, pro shop, and cafeteria with live paginated ledger.',
+    actions: [
+      { label: 'View Revenue Ledger', href: '/dashboard/reports' },
+    ],
+  },
+  {
+    title: 'Plans & Pricing',
+    tag: 'Membership Governance',
+    href: '/dashboard/membership-plans',
+    icon: Shield,
+    color: 'text-sky-400',
+    description: 'Configure Gold, Silver, and Junior membership tiers, annual pricing, and member discounts.',
+    actions: [
+      { label: 'Update Plans & Pricing', href: '/dashboard/membership-plans' },
+    ],
+  },
+  {
+    title: 'Club Managers Governance',
+    tag: 'Executive Leadership',
+    href: '/dashboard/managers',
+    icon: UserCheck,
+    color: 'text-amber-400',
+    description: 'Appoint, update, and manage General Managers who run the day-to-day club operations.',
+    actions: [
+      { label: 'Manage Club Managers', href: '/dashboard/managers' },
+    ],
+  },
+];
 
 const CLUB_MODULES = [
   {
@@ -98,6 +137,9 @@ export default async function DashboardOverviewPage() {
     redirect('/dashboard/portal');
   }
 
+  const isOwner = user?.role === 'OWNER';
+  const modules = isOwner ? OWNER_MODULES : CLUB_MODULES;
+
   return (
     <div className="space-y-8">
       {/* Welcome Banner */}
@@ -105,80 +147,133 @@ export default async function DashboardOverviewPage() {
         <div>
           <div className="flex items-center gap-2.5">
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-              The Champions Club Management
+              {isOwner ? 'Club Owner Governance & Executive Overview' : 'The Champions Club Management'}
             </h1>
             <Badge variant="success" className="text-xs">
               {user?.role || 'STAFF'}
             </Badge>
           </div>
           <p className="text-sm text-zinc-400 mt-1">
-            Welcome back, <span className="text-zinc-200 font-semibold">{user?.fullName || 'Club Administrator'}</span>. All facility modules and operational departments are active.
+            {isOwner
+              ? `Welcome back, ${user?.fullName || 'Club Owner'}. Executive oversight of club revenue, plans & pricing, and General Managers.`
+              : `Welcome back, ${user?.fullName || 'Club Administrator'}. All facility modules and operational departments are active.`}
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard/members/new">
-            <Button variant="primary" size="sm" className="gap-2 shadow-lg shadow-emerald-950/40">
-              <PlusCircle className="h-4 w-4" />
-              <span>Register Member</span>
-            </Button>
-          </Link>
-          <Link href="/dashboard/bookings">
-            <Button variant="outline" size="sm" className="gap-2 border-zinc-700">
-              <CalendarDays className="h-4 w-4" />
-              <span>Book Court</span>
-            </Button>
-          </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          {isOwner ? (
+            <>
+              <Link href="/dashboard/reports">
+                <Button variant="primary" size="sm" className="gap-2 shadow-lg shadow-emerald-950/40">
+                  <BarChart3 className="h-4 w-4" />
+                  <span>Revenue Analytics</span>
+                </Button>
+              </Link>
+              <Link href="/dashboard/membership-plans">
+                <Button variant="outline" size="sm" className="gap-2 border-zinc-700">
+                  <Shield className="h-4 w-4" />
+                  <span>Plans & Pricing</span>
+                </Button>
+              </Link>
+              <Link href="/dashboard/managers">
+                <Button variant="outline" size="sm" className="gap-2 border-zinc-700">
+                  <UserCheck className="h-4 w-4" />
+                  <span>Club Managers</span>
+                </Button>
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link href="/dashboard/members/new">
+                <Button variant="primary" size="sm" className="gap-2 shadow-lg shadow-emerald-950/40">
+                  <PlusCircle className="h-4 w-4" />
+                  <span>Register Member</span>
+                </Button>
+              </Link>
+              <Link href="/dashboard/bookings">
+                <Button variant="outline" size="sm" className="gap-2 border-zinc-700">
+                  <CalendarDays className="h-4 w-4" />
+                  <span>Book Court</span>
+                </Button>
+              </Link>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Operational Highlights */}
+      {/* Operational / Executive Highlights */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
         <Card className="border-zinc-800 bg-zinc-900/40">
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2 text-zinc-400">
               <Sparkles className="h-4 w-4 text-emerald-400" />
-              <span className="text-xs font-semibold uppercase tracking-wider">Facility Status</span>
+              <span className="text-xs font-semibold uppercase tracking-wider">
+                {isOwner ? 'Financial Oversight' : 'Facility Status'}
+              </span>
             </div>
           </CardHeader>
           <CardContent className="space-y-1">
-            <div className="text-2xl font-bold text-white">All Courts Operational</div>
-            <p className="text-xs text-zinc-400">Floodlit clay & hard courts ready for booking</p>
+            <div className="text-2xl font-bold text-white">
+              {isOwner ? 'Multi-Stream Revenue' : 'All Courts Operational'}
+            </div>
+            <p className="text-xs text-zinc-400">
+              {isOwner
+                ? 'Automated tracking across courts, pro shop & cafeteria'
+                : 'Floodlit clay & hard courts ready for booking'}
+            </p>
           </CardContent>
         </Card>
 
         <Card className="border-zinc-800 bg-zinc-900/40">
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2 text-zinc-400">
-              <Clock className="h-4 w-4 text-sky-400" />
-              <span className="text-xs font-semibold uppercase tracking-wider">Daily Hours</span>
+              <Shield className="h-4 w-4 text-sky-400" />
+              <span className="text-xs font-semibold uppercase tracking-wider">
+                {isOwner ? 'Membership Strategy' : 'Daily Hours'}
+              </span>
             </div>
           </CardHeader>
           <CardContent className="space-y-1">
-            <div className="text-2xl font-bold text-white">06:00 AM – 10:00 PM</div>
-            <p className="text-xs text-zinc-400">Courts, Pro Shop, and Nutrition Cafe open</p>
+            <div className="text-2xl font-bold text-white">
+              {isOwner ? 'Plans & Pricing' : '06:00 AM – 10:00 PM'}
+            </div>
+            <p className="text-xs text-zinc-400">
+              {isOwner
+                ? 'Owner governance for membership tiers and discounts'
+                : 'Courts, Pro Shop, and Nutrition Cafe open'}
+            </p>
           </CardContent>
         </Card>
 
         <Card className="border-zinc-800 bg-zinc-900/40">
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2 text-zinc-400">
-              <Receipt className="h-4 w-4 text-amber-400" />
-              <span className="text-xs font-semibold uppercase tracking-wider">Commerce System</span>
+              <UserCheck className="h-4 w-4 text-amber-400" />
+              <span className="text-xs font-semibold uppercase tracking-wider">
+                {isOwner ? 'Leadership Governance' : 'Commerce System'}
+              </span>
             </div>
           </CardHeader>
           <CardContent className="space-y-1">
-            <div className="text-2xl font-bold text-white">Unified POS & Member Tabs</div>
-            <p className="text-xs text-zinc-400">Consolidated checkout with member discount rules</p>
+            <div className="text-2xl font-bold text-white">
+              {isOwner ? 'Club Managers Roster' : 'Unified POS & Member Tabs'}
+            </div>
+            <p className="text-xs text-zinc-400">
+              {isOwner
+                ? 'Appoint and oversee General Managers who operate the club'
+                : 'Consolidated checkout with member discount rules'}
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Club Operations Grid */}
+      {/* Modules Grid */}
       <div className="space-y-4">
-        <h2 className="text-lg font-bold text-white tracking-tight">Facility & Operations Modules</h2>
+        <h2 className="text-lg font-bold text-white tracking-tight">
+          {isOwner ? 'Executive Governance Modules' : 'Facility & Operations Modules'}
+        </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {CLUB_MODULES.map((mod) => {
+          {modules.map((mod) => {
             const Icon = mod.icon;
             return (
               <Card

@@ -141,3 +141,99 @@ export async function getOwnerDashboardMetricsAction(): Promise<ActionResult<Own
     return handleActionError(error);
   }
 }
+
+export interface RevenueTransactionItem {
+  id: string;
+  amount: number;
+  paymentMethod: string;
+  status: string;
+  reference: string | null;
+  channel: 'MEMBERSHIPS' | 'COURTS' | 'SHOP' | 'BAR';
+  createdAt: string;
+}
+
+export interface PaginatedRevenueResult {
+  items: RevenueTransactionItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+/**
+ * Fetch paginated revenue transaction ledger with optional channel filter.
+ * Enables Owner and Managers to page through incoming payment receipts.
+ */
+export async function getPaginatedRevenueLedgerAction(params?: {
+  page?: number;
+  pageSize?: number;
+  channel?: string;
+}): Promise<ActionResult<PaginatedRevenueResult>> {
+  try {
+    await requireAuth();
+    const supabase = await createClient();
+
+    const page = Math.max(1, params?.page || 1);
+    const pageSize = Math.max(1, Math.min(params?.pageSize || 10, 50));
+    const channel = params?.channel || 'ALL';
+
+    let query = supabase
+      .from('payments')
+      .select(
+        'id, amount, payment_method, status, transaction_reference, created_at, invoice_id, booking_id, shop_order_id, bar_order_id',
+        { count: 'exact' }
+      )
+      .eq('status', 'COMPLETED')
+      .order('created_at', { ascending: false });
+
+    if (channel === 'SHOP') {
+      query = query.not('shop_order_id', 'is', null);
+    } else if (channel === 'BAR') {
+      query = query.not('bar_order_id', 'is', null);
+    } else if (channel === 'COURTS') {
+      query = query.not('booking_id', 'is', null);
+    } else if (channel === 'MEMBERSHIPS') {
+      query = query.not('invoice_id', 'is', null);
+    }
+
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data, count, error } = await query.range(from, to);
+    if (error) throw error;
+
+    const total = count || 0;
+    const totalPages = Math.ceil(total / pageSize) || 1;
+
+    const items: RevenueTransactionItem[] = (data || []).map((p) => {
+      let ch: 'MEMBERSHIPS' | 'COURTS' | 'SHOP' | 'BAR' = 'MEMBERSHIPS';
+      if (p.shop_order_id) ch = 'SHOP';
+      else if (p.bar_order_id) ch = 'BAR';
+      else if (p.booking_id) ch = 'COURTS';
+      else if (p.invoice_id) ch = 'MEMBERSHIPS';
+
+      return {
+        id: p.id,
+        amount: Number(p.amount),
+        paymentMethod: p.payment_method,
+        status: p.status,
+        reference: p.transaction_reference,
+        channel: ch,
+        createdAt: p.created_at,
+      };
+    });
+
+    return {
+      success: true,
+      data: {
+        items,
+        total,
+        page,
+        pageSize,
+        totalPages,
+      },
+    };
+  } catch (error) {
+    return handleActionError(error);
+  }
+}

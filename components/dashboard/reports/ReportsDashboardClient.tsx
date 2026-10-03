@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,9 +9,25 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
 } from 'recharts';
-import { DollarSign, Activity, ShoppingBag, Coffee, AlertCircle, Clock, Users, Users2, BarChart3 } from 'lucide-react';
-import type { OwnerDashboardMetrics } from '@/actions/reports';
-
+import {
+  DollarSign,
+  Activity,
+  ShoppingBag,
+  Coffee,
+  AlertCircle,
+  Clock,
+  Users,
+  Users2,
+  BarChart3,
+  Receipt,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react';
+import {
+  getPaginatedRevenueLedgerAction,
+  type OwnerDashboardMetrics,
+  type RevenueTransactionItem,
+} from '@/actions/reports';
 
 interface ReportsDashboardClientProps {
   metrics: OwnerDashboardMetrics;
@@ -21,6 +37,33 @@ const COLORS = ['#34d399', '#38bdf8', '#fbbf24', '#c084fc']; // emerald, sky, am
 
 export function ReportsDashboardClient({ metrics }: ReportsDashboardClientProps) {
   const [timeRange, setTimeRange] = useState<'today' | 'week' | 'month'>('month');
+
+  // Paginated Revenue Ledger State
+  const [ledgerPage, setLedgerPage] = useState(1);
+  const [ledgerChannel, setLedgerChannel] = useState<'ALL' | 'MEMBERSHIPS' | 'COURTS' | 'SHOP' | 'BAR'>('ALL');
+  const [ledgerItems, setLedgerItems] = useState<RevenueTransactionItem[]>([]);
+  const [ledgerTotal, setLedgerTotal] = useState(0);
+  const [ledgerTotalPages, setLedgerTotalPages] = useState(1);
+  const [isLoadingLedger, setIsLoadingLedger] = useState(false);
+
+  const fetchLedger = useCallback(async (page: number, channel: string) => {
+    setIsLoadingLedger(true);
+    const result = await getPaginatedRevenueLedgerAction({
+      page,
+      pageSize: 10,
+      channel,
+    });
+    if (result.success && result.data) {
+      setLedgerItems(result.data.items);
+      setLedgerTotal(result.data.total);
+      setLedgerTotalPages(result.data.totalPages);
+    }
+    setIsLoadingLedger(false);
+  }, []);
+
+  useEffect(() => {
+    fetchLedger(ledgerPage, ledgerChannel);
+  }, [fetchLedger, ledgerPage, ledgerChannel]);
 
   const activeData = metrics[timeRange];
 
@@ -253,6 +296,148 @@ export function ReportsDashboardClient({ metrics }: ReportsDashboardClientProps)
           </CardContent>
         </Card>
       </div>
+
+      {/* PAGINATED REVENUE TRANSACTION LEDGER */}
+      <Card className="border-zinc-800 bg-zinc-900/50">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Receipt className="h-4 w-4 text-emerald-400" />
+              <CardTitle className="text-base text-white">Live Revenue Transaction Ledger</CardTitle>
+            </div>
+            <CardDescription className="text-xs text-zinc-400 mt-1">
+              Paginated ledger of all verified payment receipts across club operations
+            </CardDescription>
+          </div>
+
+          {/* Channel Filters */}
+          <div className="flex flex-wrap items-center gap-1.5 bg-zinc-950 p-1 rounded-lg border border-zinc-800 text-xs">
+            {(['ALL', 'MEMBERSHIPS', 'COURTS', 'SHOP', 'BAR'] as const).map((ch) => (
+              <button
+                key={ch}
+                type="button"
+                onClick={() => {
+                  setLedgerChannel(ch);
+                  setLedgerPage(1);
+                }}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${
+                  ledgerChannel === ch
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+                }`}
+              >
+                {ch === 'ALL' ? 'All Channels' : ch}
+              </button>
+            ))}
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-4">
+          <div className="overflow-x-auto rounded-lg border border-zinc-800">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-zinc-950/80 text-zinc-400 uppercase text-[10px] tracking-wider border-b border-zinc-800">
+                <tr>
+                  <th className="py-2.5 px-3">Receipt / ID</th>
+                  <th className="py-2.5 px-3">Revenue Stream</th>
+                  <th className="py-2.5 px-3">Payment Method</th>
+                  <th className="py-2.5 px-3">Date & Time</th>
+                  <th className="py-2.5 px-3">Amount</th>
+                  <th className="py-2.5 px-3 text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/60 bg-zinc-900/30">
+                {isLoadingLedger ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-zinc-500">
+                      Loading revenue transactions...
+                    </td>
+                  </tr>
+                ) : ledgerItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-zinc-500">
+                      No revenue transactions found for this period/filter.
+                    </td>
+                  </tr>
+                ) : (
+                  ledgerItems.map((item) => (
+                    <tr key={item.id} className="hover:bg-zinc-850/40 transition-colors">
+                      <td className="py-2.5 px-3 font-mono text-zinc-300">
+                        {item.reference || item.id.substring(0, 8)}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <Badge
+                          variant="outline"
+                          className={
+                            item.channel === 'COURTS'
+                              ? 'text-sky-400 border-sky-500/30 bg-sky-950/30 text-[10px]'
+                              : item.channel === 'SHOP'
+                              ? 'text-amber-400 border-amber-500/30 bg-amber-950/30 text-[10px]'
+                              : item.channel === 'BAR'
+                              ? 'text-orange-400 border-orange-500/30 bg-orange-950/30 text-[10px]'
+                              : 'text-emerald-400 border-emerald-500/30 bg-emerald-950/30 text-[10px]'
+                          }
+                        >
+                          {item.channel}
+                        </Badge>
+                      </td>
+                      <td className="py-2.5 px-3 text-zinc-300 font-mono text-[11px]">
+                        {item.paymentMethod}
+                      </td>
+                      <td className="py-2.5 px-3 text-zinc-400 text-[11px]">
+                        {new Date(item.createdAt).toLocaleString()}
+                      </td>
+                      <td className="py-2.5 px-3 font-bold text-white font-mono">
+                        {formatCurrency(item.amount)}
+                      </td>
+                      <td className="py-2.5 px-3 text-right">
+                        <Badge variant="success" className="text-[10px]">
+                          {item.status}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination Controls */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 text-xs text-zinc-400">
+            <div>
+              Showing {ledgerTotal > 0 ? (ledgerPage - 1) * 10 + 1 : 0} to{' '}
+              {Math.min(ledgerPage * 10, ledgerTotal)} of {ledgerTotal} transactions
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-2.5 text-xs border-zinc-850"
+                disabled={ledgerPage <= 1 || isLoadingLedger}
+                onClick={() => setLedgerPage((p) => Math.max(1, p - 1))}
+              >
+                <ChevronLeft className="w-3.5 h-3.5 mr-1" />
+                Previous
+              </Button>
+
+              <span className="text-zinc-300 font-medium px-2">
+                Page {ledgerPage} of {ledgerTotalPages}
+              </span>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-2.5 text-xs border-zinc-850"
+                disabled={ledgerPage >= ledgerTotalPages || isLoadingLedger}
+                onClick={() => setLedgerPage((p) => p + 1)}
+              >
+                Next
+                <ChevronRight className="w-3.5 h-3.5 ml-1" />
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

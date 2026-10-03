@@ -1,9 +1,16 @@
+import { redirect } from 'next/navigation';
+import { getCurrentUser } from '@/lib/auth/session';
 import { DashboardModuleShell } from '@/components/dashboard/module-shell';
 import { StaffHeaderActions } from '@/components/dashboard/StaffHeaderActions';
 import { getStaffDashboardDataAction } from '@/actions/staff';
 import { StaffDashboardClient } from '@/components/dashboard/staff/StaffDashboardClient';
 
 export default async function StaffDashboardPage() {
+  const user = await getCurrentUser();
+  if (user?.role === 'OWNER') {
+    redirect('/dashboard/managers');
+  }
+
   const result = await getStaffDashboardDataAction();
   
   if (!result.success) {
