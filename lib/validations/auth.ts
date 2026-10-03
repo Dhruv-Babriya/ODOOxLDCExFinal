@@ -25,3 +25,16 @@ export const profileUpdateSchema = z.object({
 });
 
 export type ProfileUpdateInput = z.infer<typeof profileUpdateSchema>;
+
+export const passwordResetRequestSchema = z.object({
+  email: z.string().trim().email('Invalid email address'),
+});
+
+export type PasswordResetRequestInput = z.infer<typeof passwordResetRequestSchema>;
+
+export const passwordResetSchema = z.object({
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+});
+
+export type PasswordResetInput = z.infer<typeof passwordResetSchema>;
+
