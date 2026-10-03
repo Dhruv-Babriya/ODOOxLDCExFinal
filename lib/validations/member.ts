@@ -106,3 +106,14 @@ export const memberStatusUpdateSchema = z.object({
 });
 
 export type MemberStatusUpdateInput = z.infer<typeof memberStatusUpdateSchema>;
+
+export const memberEnrollSelfSchema = z.object({
+  planId: z.string().uuid('Membership plan is required'),
+  paymentMethod: z.enum(['CASH', 'CARD', 'UPI', 'UNPAID'] as const).default('CARD'),
+  paymentReference: z.string().trim().optional().or(z.literal('')),
+  emergencyContact: z.string().trim().optional().or(z.literal('')),
+  notes: z.string().trim().optional().or(z.literal('')),
+});
+
+export type MemberEnrollSelfInput = z.infer<typeof memberEnrollSelfSchema>;
+

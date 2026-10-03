@@ -171,6 +171,7 @@ export async function previewBookingPriceAction(
       .select(`
         id,
         status,
+        end_date,
         membership_plans (
           tier,
           court_discount_percent,
@@ -180,7 +181,13 @@ export async function previewBookingPriceAction(
       .eq('id', validated.memberId)
       .single();
 
-    if (!member || member.status !== 'ACTIVE' || !member.membership_plans) {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const isMemberActive =
+      member &&
+      member.status === 'ACTIVE' &&
+      (!member.end_date || member.end_date >= todayStr);
+
+    if (!member || !isMemberActive || !member.membership_plans) {
       const guestPricing = calculateCourtPrice({ hourlyRate });
       return {
         success: true,
@@ -301,6 +308,7 @@ export async function createCourtBookingAction(
         .select(`
           id,
           status,
+          end_date,
           membership_plans (
             tier,
             court_discount_percent,
@@ -310,7 +318,13 @@ export async function createCourtBookingAction(
         .eq('id', memberId)
         .single();
 
-      if (member && member.status === 'ACTIVE' && member.membership_plans) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const isMemberActive =
+        member &&
+        member.status === 'ACTIVE' &&
+        (!member.end_date || member.end_date >= todayStr);
+
+      if (isMemberActive && member.membership_plans) {
         const plan = member.membership_plans as {
           tier: string;
           court_discount_percent: number;
@@ -503,6 +517,7 @@ export async function rescheduleBookingAction(
         .select(`
           id,
           status,
+          end_date,
           membership_plans (
             tier,
             court_discount_percent,
@@ -512,7 +527,13 @@ export async function rescheduleBookingAction(
         .eq('id', booking.member_id)
         .single();
 
-      if (member && member.status === 'ACTIVE' && member.membership_plans) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const isMemberActive =
+        member &&
+        member.status === 'ACTIVE' &&
+        (!member.end_date || member.end_date >= todayStr);
+
+      if (isMemberActive && member.membership_plans) {
         const plan = member.membership_plans as {
           tier: string;
           court_discount_percent: number;

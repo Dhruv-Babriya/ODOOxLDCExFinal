@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { signUpAction } from '@/actions/auth';
-import type { AppRole } from '@/types/shared';
 import { UserPlus } from 'lucide-react';
 
 export default function RegisterPage() {
@@ -16,7 +15,6 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<AppRole>('MEMBER');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -32,7 +30,6 @@ export default function RegisterPage() {
       email,
       phone,
       password,
-      role,
     });
 
     if (!result.success) {
@@ -97,22 +94,6 @@ export default function RegisterPage() {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
             />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-300">Account Role (Development Testing)</label>
-            <select
-              className="flex h-10 w-full rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              value={role}
-              onChange={(e) => setRole(e.target.value as AppRole)}
-            >
-              <option value="MEMBER">Club Member</option>
-              <option value="FRONT_DESK">Front Desk Staff</option>
-              <option value="SHOP_STAFF">Shop Staff</option>
-              <option value="BAR_STAFF">Bar / Cafeteria Staff</option>
-              <option value="ADMIN">Administrator</option>
-              <option value="OWNER">Club Owner</option>
-            </select>
           </div>
 
           <div className="space-y-1.5">

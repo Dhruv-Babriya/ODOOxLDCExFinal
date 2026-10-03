@@ -495,6 +495,7 @@ export async function createBarOrderAction(
         .select(`
           id,
           status,
+          end_date,
           membership_plans (
             tier,
             bar_discount_percent
@@ -503,7 +504,13 @@ export async function createBarOrderAction(
         .eq('id', effectiveMemberId)
         .single();
 
-      if (member?.status === 'ACTIVE' && member.membership_plans) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const isMemberActive =
+        member &&
+        member.status === 'ACTIVE' &&
+        (!member.end_date || member.end_date >= todayStr);
+
+      if (isMemberActive && member.membership_plans) {
         barDiscountPercent = Number(member.membership_plans.bar_discount_percent);
       }
     }

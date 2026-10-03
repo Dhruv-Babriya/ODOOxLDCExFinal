@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/auth/session';
 import { handleActionError } from '@/lib/errors';
 import type { ActionResult, NotificationItem, NotificationType } from '@/types/shared';
@@ -131,9 +132,28 @@ export async function createNotificationAction(params: {
   link?: string;
 }): Promise<ActionResult<{ notificationId: string }>> {
   try {
-    const supabase = await createClient();
+    const adminSupabase = createAdminClient();
 
-    const { data, error } = await supabase
+    // Deduplication: prevent identical unread notifications within 5 minutes
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const { data: existing } = await adminSupabase
+      .from('notifications')
+      .select('id')
+      .eq('user_id', params.userId)
+      .eq('title', params.title)
+      .eq('is_read', false)
+      .gte('created_at', fiveMinutesAgo)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      return {
+        success: true,
+        data: { notificationId: existing[0].id },
+        message: 'Notification already delivered recently (deduplicated).',
+      };
+    }
+
+    const { data, error } = await adminSupabase
       .from('notifications')
       .insert({
         user_id: params.userId,

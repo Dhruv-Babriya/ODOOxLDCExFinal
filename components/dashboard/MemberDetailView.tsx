@@ -55,12 +55,18 @@ export function MemberDetailView({
 
   // Renewal Form State
   const [renewalPlanId, setRenewalPlanId] = useState(member.current_plan_id || plans[0]?.id || '');
-  const [renewalStartDate, setRenewalStartDate] = useState(
-    new Date().toISOString().split('T')[0]
-  );
+  const defaultRenewalStart = () => {
+    const today = new Date().toISOString().split('T')[0];
+    if (member.end_date && member.end_date > today) {
+      return member.end_date;
+    }
+    return today;
+  };
+  const [renewalStartDate, setRenewalStartDate] = useState(defaultRenewalStart());
   const selectedPlan = plans.find((p) => p.id === renewalPlanId) || plans[0];
   const initialRenewalEndDate = () => {
-    const d = new Date(renewalStartDate);
+    const start = defaultRenewalStart();
+    const d = new Date(start);
     d.setDate(d.getDate() + (selectedPlan?.duration_days || 365));
     return d.toISOString().split('T')[0];
   };

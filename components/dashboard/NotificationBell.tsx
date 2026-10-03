@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   getUserNotificationsAction,
@@ -27,7 +27,7 @@ export function NotificationBell() {
   const [isLoading, setIsLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const fetchNotifications = useCallback(async () => {
+  const fetchNotifications = async () => {
     try {
       const res = await getUserNotificationsAction();
       if (res.success && res.data) {
@@ -36,24 +36,23 @@ export function NotificationBell() {
     } catch {
       // Session might not be ready yet
     }
-  }, []);
+  };
 
   useEffect(() => {
     let mounted = true;
-    getUserNotificationsAction().then((res) => {
-      if (mounted && res.success && res.data) {
-        setNotifications(res.data);
-      }
-    }).catch(() => {});
-
-    const interval = setInterval(() => {
-      getUserNotificationsAction().then((res) => {
+    const load = async () => {
+      try {
+        const res = await getUserNotificationsAction();
         if (mounted && res.success && res.data) {
           setNotifications(res.data);
         }
-      }).catch(() => {});
-    }, 30000);
+      } catch {
+        // Session might not be ready yet
+      }
+    };
 
+    void load();
+    const interval = setInterval(load, 30000);
     return () => {
       mounted = false;
       clearInterval(interval);

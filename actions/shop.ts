@@ -112,6 +112,7 @@ export async function createShopOrderAction(
         .select(`
           id,
           status,
+          end_date,
           membership_plans (
             tier,
             shop_discount_percent
@@ -120,7 +121,13 @@ export async function createShopOrderAction(
         .eq('id', effectiveMemberId)
         .single();
 
-      if (member?.status === 'ACTIVE' && member.membership_plans) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const isMemberActive =
+        member &&
+        member.status === 'ACTIVE' &&
+        (!member.end_date || member.end_date >= todayStr);
+
+      if (isMemberActive && member.membership_plans) {
         shopDiscountPercent = Number(member.membership_plans.shop_discount_percent);
       }
     }
