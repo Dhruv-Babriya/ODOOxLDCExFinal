@@ -240,3 +240,69 @@ export async function cancelLeaveRequestAction(
     return handleActionError(err);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Staff Operational Queries & Approvals
+// ---------------------------------------------------------------------------
+
+export async function getStaffDashboardDataAction() {
+  try {
+    await requireAuth();
+    const supabase = await createClient();
+
+    // 1. Fetch Staff with Profiles
+    const { data: staff, error: staffError } = await supabase
+      .from('staff')
+      .select(`
+        id, employee_code, department, position, is_active,
+        profile:profiles(id, full_name, email, role)
+      `)
+      .order('created_at', { ascending: false });
+    if (staffError) throw staffError;
+
+    // 2. Fetch Shifts (Today and Upcoming)
+    const today = new Date().toISOString().split('T')[0];
+    const { data: shifts, error: shiftsError } = await supabase
+      .from('staff_shifts')
+      .select(`
+        id, shift_date, start_time, end_time, status, notes,
+        staff:staff(id, employee_code, profile:profiles(full_name))
+      `)
+      .gte('shift_date', today)
+      .order('shift_date', { ascending: true })
+      .order('start_time', { ascending: true });
+    if (shiftsError) throw shiftsError;
+
+    // 3. Fetch Leaves
+    const { data: leaves, error: leavesError } = await supabase
+      .from('leave_requests')
+      .select(`
+        id, leave_type, start_date, end_date, reason, status,
+        staff:staff(id, employee_code, profile:profiles(full_name))
+      `)
+      .order('created_at', { ascending: false });
+    if (leavesError) throw leavesError;
+
+    return { success: true, data: { staff, shifts, leaves } };
+  } catch (error) {
+    return handleActionError(error);
+  }
+}
+
+export async function updateLeaveStatusAction(leaveId: string, status: 'APPROVED' | 'REJECTED') {
+  try {
+    const session = await requirePermission('ADMIN', 'OWNER');
+    const supabase = await createClient();
+
+    const { error } = await supabase
+      .from('leave_requests')
+      .update({ status, reviewed_by: session.user.id, reviewed_at: new Date().toISOString() })
+      .eq('id', leaveId);
+      
+    if (error) throw error;
+    revalidatePath('/dashboard/staff');
+    return { success: true, data: { id: leaveId } };
+  } catch (error) {
+    return handleActionError(error);
+  }
+}
