@@ -55,6 +55,7 @@ export interface MenuItem {
   price: number;
   is_available: boolean;
   category_id: string | null;
+  image_url?: string | null;
   menu_categories?: { name: string } | null;
 }
 
@@ -1114,6 +1115,12 @@ export function BarManager({
                           </Badge>
                         )}
                       </div>
+                      {item.image_url && (
+                        <div className="w-full aspect-video mt-2 mb-1 rounded overflow-hidden bg-zinc-950 border border-zinc-800">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                        </div>
+                      )}
                       <h4 className="text-xs font-bold text-zinc-100 mt-1 line-clamp-1">{item.name}</h4>
                       {item.description && (
                         <p className="text-[11px] text-zinc-400 mt-0.5 line-clamp-2">{item.description}</p>

@@ -971,6 +971,7 @@ export type Database = {
           is_available: boolean
           name: string
           price: number
+          image_url: string | null
         }
         Insert: {
           category_id?: string | null
@@ -980,6 +981,7 @@ export type Database = {
           is_available?: boolean
           name: string
           price: number
+          image_url?: string | null
         }
         Update: {
           category_id?: string | null
@@ -989,6 +991,7 @@ export type Database = {
           is_available?: boolean
           name?: string
           price?: number
+          image_url?: string | null
         }
         Relationships: [
           {

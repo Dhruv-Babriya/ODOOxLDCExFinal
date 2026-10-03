@@ -25,7 +25,7 @@ export default async function BarCafeteriaDashboardPage() {
       .order('display_order'),
     supabase
       .from('menu_items')
-      .select('id, name, description, price, is_available, category_id, menu_categories(name)')
+      .select('id, name, description, price, is_available, category_id, image_url, menu_categories(name)')
       .order('name'),
     supabase
       .from('customer_tabs')

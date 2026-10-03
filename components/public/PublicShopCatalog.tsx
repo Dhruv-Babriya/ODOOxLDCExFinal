@@ -30,6 +30,7 @@ export interface Product {
   price: number;
   low_stock_threshold: number;
   category_id: string | null;
+  image_url?: string | null;
   product_categories?: { name: string } | null;
   inventory?: { quantity_on_hand: number } | null;
 }
@@ -215,6 +216,16 @@ export function PublicShopCatalog({ initialProducts, categories }: PublicShopCat
                   </Badge>
                   <span className="text-[11px] font-mono text-zinc-500">{prod.sku}</span>
                 </div>
+                {prod.image_url ? (
+                  <div className="w-full aspect-square mt-3 mb-2 rounded-md overflow-hidden bg-zinc-950 flex items-center justify-center border border-zinc-800">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={prod.image_url} alt={prod.name} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                ) : (
+                  <div className="w-full h-40 mt-3 mb-2 rounded-md bg-zinc-950 flex items-center justify-center border border-zinc-800">
+                    <ShoppingBag className="h-10 w-10 text-zinc-700" />
+                  </div>
+                )}
                 <CardTitle className="text-lg text-white mt-2 group-hover:text-emerald-300 transition-colors">
                   {prod.name}
                 </CardTitle>

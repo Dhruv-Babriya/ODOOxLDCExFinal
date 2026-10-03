@@ -22,6 +22,7 @@ export default async function ShopPage() {
         low_stock_threshold,
         is_active,
         category_id,
+        image_url,
         product_categories (name),
         inventory (quantity_on_hand)
       `)
