@@ -72,7 +72,7 @@ const MEMBER_SIDEBAR_SECTIONS: { title: string; items: SidebarItem[] }[] = [
   {
     title: 'Member Experience',
     items: [
-      { href: '/dashboard/portal', label: 'Member Portal', icon: Sparkles },
+      { href: '/dashboard/portal', label: 'Plans & Pricing', icon: Shield },
       { href: '/dashboard/profile', label: 'My Profile', icon: User },
     ],
   },

@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { ShieldAlert, Users, LayoutDashboard } from 'lucide-react';
 
 export const metadata = {
-  title: 'Member Portal | The Champions Club',
+  title: 'Plans & Pricing | The Champions Club',
   description: 'Member self-service portal, perks, bookings, orders, and payment history.',
 };
 
