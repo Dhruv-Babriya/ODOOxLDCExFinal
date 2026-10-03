@@ -326,3 +326,142 @@ export interface PaginatedResult<T> {
   pageSize: number;
   totalPages: number;
 }
+
+// ---------------------------------------------------------------------------
+// Developer 1 — Concrete Entity View Contracts
+// ---------------------------------------------------------------------------
+export interface MemberWithDetails {
+  id: string;
+  profile_id: string;
+  membership_number: string;
+  current_plan_id: string | null;
+  status: MembershipStatus;
+  start_date: string;
+  end_date: string;
+  emergency_contact: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  profiles: {
+    id: string;
+    email: string;
+    full_name: string;
+    phone: string | null;
+    role: AppRole;
+    avatar_url: string | null;
+    is_active: boolean;
+  };
+  membership_plans: {
+    id: string;
+    name: string;
+    tier: MembershipTier;
+    description: string | null;
+    duration_days: number;
+    price: number;
+    court_discount_percent: number;
+    shop_discount_percent: number;
+    bar_discount_percent: number;
+    free_court_hours_per_day: number;
+    max_daily_bookings: number;
+    is_active: boolean;
+  } | null;
+  derived_status: 'ACTIVE' | 'EXPIRING_SOON' | 'EXPIRED' | 'SUSPENDED' | 'CANCELLED' | 'PENDING';
+  days_remaining: number;
+}
+
+export interface MembershipHistoryItem {
+  id: string;
+  member_id: string;
+  plan_id: string;
+  start_date: string;
+  end_date: string;
+  status: MembershipStatus;
+  changed_by: string | null;
+  notes: string | null;
+  created_at: string;
+  membership_plans?: {
+    name: string;
+    tier: MembershipTier;
+    price: number;
+  } | null;
+  profiles?: {
+    full_name: string;
+    email: string;
+  } | null;
+}
+
+export interface MembershipPlanItem {
+  id: string;
+  name: string;
+  tier: MembershipTier;
+  description: string | null;
+  duration_days: number;
+  price: number;
+  court_discount_percent: number;
+  shop_discount_percent: number;
+  bar_discount_percent: number;
+  free_court_hours_per_day: number;
+  max_daily_bookings: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  member_count?: number;
+}
+
+/**
+ * Calculates derived membership expiry status from dates and stored status.
+ * Requirement: Active, Expiring soon (within 30 days), Expired.
+ */
+export function calculateMembershipExpiryStatus(
+  status: MembershipStatus,
+  endDateStr: string
+): {
+  derivedStatus: 'ACTIVE' | 'EXPIRING_SOON' | 'EXPIRED' | 'SUSPENDED' | 'CANCELLED' | 'PENDING';
+  daysRemaining: number;
+  isExpiringSoon: boolean;
+  isExpired: boolean;
+} {
+  if (status === 'SUSPENDED' || status === 'CANCELLED' || status === 'PENDING') {
+    return {
+      derivedStatus: status,
+      daysRemaining: 0,
+      isExpiringSoon: false,
+      isExpired: false,
+    };
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const end = new Date(endDateStr);
+  end.setHours(0, 0, 0, 0);
+
+  const diffTime = end.getTime() - today.getTime();
+  const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  if (daysRemaining < 0) {
+    return {
+      derivedStatus: 'EXPIRED',
+      daysRemaining,
+      isExpiringSoon: false,
+      isExpired: true,
+    };
+  }
+
+  if (daysRemaining <= 30) {
+    return {
+      derivedStatus: 'EXPIRING_SOON',
+      daysRemaining,
+      isExpiringSoon: true,
+      isExpired: false,
+    };
+  }
+
+  return {
+    derivedStatus: 'ACTIVE',
+    daysRemaining,
+    isExpiringSoon: false,
+    isExpired: false,
+  };
+}
+

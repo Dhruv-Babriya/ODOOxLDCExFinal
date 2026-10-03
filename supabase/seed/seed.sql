@@ -197,3 +197,33 @@ VALUES
   ('77777777-7777-7777-7777-777777777704', '66666666-6666-6666-6666-666666666602', 'Paneer Tikka Protein Bowl', 'Chargrilled cottage cheese, quinoa, steamed broccoli and mint dip.', 220.00, TRUE),
   ('77777777-7777-7777-7777-777777777705', '66666666-6666-6666-6666-666666666603', 'Champions Club Toasted Sandwich', 'Triple-decker toasted sandwich with cheese, tomatoes and house fries.', 180.00, TRUE)
 ON CONFLICT DO NOTHING;
+
+-- 7. Dev Users, Members & Membership History
+INSERT INTO auth.users (
+  id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+) VALUES
+  ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'owner@thechampionsclub.com', crypt('password123', gen_salt('bf')), NOW(), '{"provider":"email","providers":["email"]}', '{"full_name":"Vikramaditya Singhania","role":"OWNER"}', NOW(), NOW()),
+  ('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'admin@thechampionsclub.com', crypt('password123', gen_salt('bf')), NOW(), '{"provider":"email","providers":["email"]}', '{"full_name":"Priya Nair","role":"ADMIN"}', NOW(), NOW()),
+  ('00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'frontdesk@thechampionsclub.com', crypt('password123', gen_salt('bf')), NOW(), '{"provider":"email","providers":["email"]}', '{"full_name":"Rahul Mehta","role":"FRONT_DESK"}', NOW(), NOW()),
+  ('00000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'rohit.sharma@example.com', crypt('password123', gen_salt('bf')), NOW(), '{"provider":"email","providers":["email"]}', '{"full_name":"Rohit Sharma","role":"MEMBER"}', NOW(), NOW()),
+  ('00000000-0000-0000-0000-000000000005', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'virat.kohli@example.com', crypt('password123', gen_salt('bf')), NOW(), '{"provider":"email","providers":["email"]}', '{"full_name":"Virat Kohli","role":"MEMBER"}', NOW(), NOW()),
+  ('00000000-0000-0000-0000-000000000006', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'shubman.gill@example.com', crypt('password123', gen_salt('bf')), NOW(), '{"provider":"email","providers":["email"]}', '{"full_name":"Shubman Gill","role":"MEMBER"}', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.members (
+  id, profile_id, membership_number, current_plan_id, status, start_date, end_date, emergency_contact, notes
+) VALUES
+  ('44444444-4444-4444-4444-444444444401', '00000000-0000-0000-0000-000000000004', 'CC-2026-1001', '11111111-1111-1111-1111-111111111101', 'ACTIVE', '2026-01-01', '2026-12-31', 'Ritika Sajdeh - +91 98200 11111', 'Captain & VIP Gold Member'),
+  ('44444444-4444-4444-4444-444444444402', '00000000-0000-0000-0000-000000000005', 'CC-2026-1002', '11111111-1111-1111-1111-111111111102', 'ACTIVE', '2025-10-17', '2026-10-17', 'Anushka Sharma - +91 98200 22222', 'Annual Silver Member. Renewal due soon.'),
+  ('44444444-4444-4444-4444-444444444403', '00000000-0000-0000-0000-000000000006', 'CC-2026-1003', '11111111-1111-1111-1111-111111111103', 'EXPIRED', '2025-09-20', '2026-09-20', 'Lakhwinder Singh - +91 98200 33333', 'Junior academy development program')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.membership_history (
+  member_id, plan_id, start_date, end_date, status, changed_by, notes
+) VALUES
+  ('44444444-4444-4444-4444-444444444401', '11111111-1111-1111-1111-111111111101', '2026-01-01', '2026-12-31', 'ACTIVE', '00000000-0000-0000-0000-000000000001', 'Initial enrollment in Gold Membership'),
+  ('44444444-4444-4444-4444-444444444402', '11111111-1111-1111-1111-111111111102', '2025-10-17', '2026-10-17', 'ACTIVE', '00000000-0000-0000-0000-000000000002', 'Initial enrollment in Silver Membership'),
+  ('44444444-4444-4444-4444-444444444403', '11111111-1111-1111-1111-111111111103', '2025-09-20', '2026-09-20', 'ACTIVE', '00000000-0000-0000-0000-000000000002', 'Enrolled in Junior Academy'),
+  ('44444444-4444-4444-4444-444444444403', '11111111-1111-1111-1111-111111111103', '2025-09-20', '2026-09-20', 'EXPIRED', '00000000-0000-0000-0000-000000000002', 'System status update: Membership expired on 2026-09-20')
+ON CONFLICT DO NOTHING;
+

@@ -1,54 +1,39 @@
-import { DashboardModuleShell } from '@/components/dashboard/module-shell';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { createClient } from '@/lib/supabase/server';
-import { formatCurrency } from '@/lib/utils';
+import { getCurrentUser } from '@/lib/auth/session';
+import { hasPermission } from '@/lib/permissions/rbac';
+import { CourtsManager } from '@/components/dashboard/CourtsManager';
+import type { AppRole } from '@/types/shared';
 
 export default async function CourtsDashboardPage() {
+  const user = await getCurrentUser();
   const supabase = await createClient();
   const { data: courts } = await supabase.from('courts').select('*').order('name');
 
+  const canManage = hasPermission(user?.role as AppRole, 'courts:manage');
+
   return (
-    <DashboardModuleShell
-      title="Courts Management"
-      subtitle="Tennis clay and hard courts, indoor arenas, and cricket practice pitch management."
-      developerOwner="Developer 2"
-      developerRole="Courts & Booking Specialist"
-      tables={['courts', 'court_bookings']}
-      contracts={['Court', 'SportType', 'courtCreateSchema']}
-      phase1Roadmap={[
-        'Court status toggles (Active, Maintenance, Private Booking)',
-        'Hourly base pricing adjustment with automatic audit logging',
-        'Court schedule timeline visualization component',
-      ]}
-    >
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {courts?.map((c) => (
-          <Card key={c.id} className="border-zinc-800 bg-zinc-900/50">
-            <CardHeader className="pb-3">
-              <div className="flex justify-between items-center">
-                <Badge variant={c.sport_type === 'TENNIS' ? 'default' : 'warning'}>
-                  {c.sport_type}
-                </Badge>
-                <Badge variant={c.is_active ? 'success' : 'destructive'} className="text-[10px]">
-                  {c.is_active ? 'Operational' : 'Maintenance'}
-                </Badge>
-              </div>
-              <CardTitle className="text-base text-white mt-2">{c.name}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-xs text-zinc-400 border-t border-zinc-800/80 pt-3">
-              <div className="flex justify-between">
-                <span>Hourly Base Rate:</span>
-                <span className="font-semibold text-white">{formatCurrency(c.hourly_rate)} / hr</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Facility Type:</span>
-                <span className="text-zinc-300">{c.is_indoor ? 'Indoor Arena' : 'Outdoor Court'}</span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-white">Courts Management</h1>
+          <p className="text-sm text-zinc-400 mt-1">
+            Tennis clay and hard courts, indoor arenas, and cricket pitch management.
+          </p>
+        </div>
       </div>
-    </DashboardModuleShell>
+
+      <CourtsManager
+        initialCourts={(courts || []).map((c) => ({
+          id: c.id,
+          name: c.name,
+          sport_type: c.sport_type,
+          hourly_rate: Number(c.hourly_rate),
+          is_indoor: c.is_indoor,
+          is_active: c.is_active,
+        }))}
+        canManage={canManage}
+      />
+    </div>
   );
 }
