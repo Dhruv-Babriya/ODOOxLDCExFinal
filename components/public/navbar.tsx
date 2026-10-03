@@ -7,7 +7,6 @@ import { Trophy, User } from 'lucide-react';
 
 const NAV_LINKS = [
   { href: '/', label: 'Home' },
-  { href: '/about', label: 'About' },
   { href: '/memberships', label: 'Memberships' },
   { href: '/courts', label: 'Courts & Slots' },
   { href: '/shop', label: 'Pro Shop' },
