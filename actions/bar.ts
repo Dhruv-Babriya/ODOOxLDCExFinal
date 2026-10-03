@@ -27,7 +27,8 @@ import {
   type UpdateKitchenStatusInput,
   type UpdateBarOrderStatusInput,
 } from '@/lib/validations/bar';
-import { handleActionError, AppError } from '@/lib/errors';
+import { handleActionError, AppError, AuthorizationError } from '@/lib/errors';
+import { recordCommercePaymentSchema, type RecordCommercePaymentInput } from '@/lib/validations/shop';
 import { requireAuth, requirePermission } from '@/lib/auth/session';
 import { calculateBarPrice } from '@/lib/pricing';
 import { type TableStatus, type KitchenStatus, type OrderStatus } from '@/types/shared';
@@ -468,15 +469,24 @@ export async function createBarOrderAction(
     // 3. Determine member discount automatically
     let barDiscountPercent = 0;
     let effectiveMemberId = validated.memberId || null;
+    let effectiveTableId = validated.tableId || null;
 
-    // If tab is linked, inherit tab's member if not explicitly passed
-    if (!effectiveMemberId && validated.tabId) {
-      const { data: tab } = await supabase
+    // If tab is linked, validate tab status and inherit tab's member & table if not explicitly passed
+    if (validated.tabId) {
+      const { data: tab, error: tabErr } = await supabase
         .from('customer_tabs')
-        .select('member_id')
+        .select('member_id, table_id, status')
         .eq('id', validated.tabId)
         .single();
-      if (tab?.member_id) effectiveMemberId = tab.member_id;
+
+      if (tabErr || !tab) {
+        throw new AppError('Customer tab not found.', 'NOT_FOUND', 404);
+      }
+      if (tab.status === 'CLOSED') {
+        throw new AppError('Cannot add orders to an already closed tab.', 'BAD_REQUEST', 400);
+      }
+      if (!effectiveMemberId && tab.member_id) effectiveMemberId = tab.member_id;
+      if (!effectiveTableId && tab.table_id) effectiveTableId = tab.table_id;
     }
 
     if (effectiveMemberId) {
@@ -513,7 +523,7 @@ export async function createBarOrderAction(
       .insert({
         order_number: orderNumber,
         tab_id: validated.tabId || null,
-        table_id: validated.tableId || null,
+        table_id: effectiveTableId || null,
         member_id: effectiveMemberId || null,
         notes: validated.notes || null,
         kitchen_status: 'PENDING',
@@ -545,12 +555,12 @@ export async function createBarOrderAction(
       throw insertItemsError;
     }
 
-    // 6. Update table status to OCCUPIED if placed on table
-    if (validated.tableId) {
+    // 6. Update table status to OCCUPIED if placed on table or linked via tab
+    if (effectiveTableId) {
       await supabase
         .from('bar_tables')
         .update({ status: 'OCCUPIED' })
-        .eq('id', validated.tableId);
+        .eq('id', effectiveTableId);
     }
 
     revalidatePath('/dashboard/bar');
@@ -838,3 +848,101 @@ export async function getBarOperationalSummaryAction(): Promise<
     return handleActionError(err);
   }
 }
+
+/**
+ * Phase 3 Hardening: Records financial payment for a completed/served bar order
+ * Enforces server-authoritative amount, prevents duplicate payments, and records audit trail.
+ */
+export async function recordBarOrderPaymentAction(
+  input: RecordCommercePaymentInput
+): Promise<ActionResult<{ paymentId: string; paymentNumber: string }>> {
+  try {
+    const validated = recordCommercePaymentSchema.parse(input);
+    const user = await requireAuth();
+    const supabase = await createClient();
+
+    // 1. Fetch order
+    const { data: order, error: orderErr } = await supabase
+      .from('bar_orders')
+      .select('id, member_id, tab_id, total_amount, order_status, kitchen_status')
+      .eq('id', validated.orderId)
+      .single();
+
+    if (orderErr || !order) {
+      throw new AppError('Bar order not found.', 'NOT_FOUND', 404);
+    }
+
+    if (order.order_status === 'CANCELLED') {
+      throw new AppError('Cannot record payment for a cancelled order.', 'BAD_REQUEST', 400);
+    }
+
+    // Authorization: staff/admin or the purchasing member
+    const isStaff = ['OWNER', 'ADMIN', 'BAR_STAFF', 'FRONT_DESK'].includes(user.role);
+    const isOwnerMember = user.role === 'MEMBER' && user.memberId && order.member_id === user.memberId;
+    if (!isStaff && !isOwnerMember) {
+      throw new AuthorizationError('You do not have permission to record payment for this order.');
+    }
+
+    // 2. Concurrency & Duplication Guard: Check if completed payment already exists
+    const { data: existingPayment } = await supabase
+      .from('payments')
+      .select('id, payment_number')
+      .eq('bar_order_id', validated.orderId)
+      .eq('status', 'COMPLETED')
+      .maybeSingle();
+
+    if (existingPayment) {
+      throw new AppError(
+        `Payment already recorded for this bar order (${existingPayment.payment_number}). Duplicate payment rejected.`,
+        'CONFLICT',
+        409
+      );
+    }
+
+    // 3. Insert payment record into public.payments
+    const paymentNumber = `PAY-BAR-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
+
+    const { data: payment, error: payErr } = await supabase
+      .from('payments')
+      .insert({
+        payment_number: paymentNumber,
+        bar_order_id: validated.orderId,
+        member_id: order.member_id || null,
+        amount: validated.amount,
+        payment_method: validated.paymentMethod,
+        status: 'COMPLETED',
+        transaction_reference: validated.transactionReference || null,
+        recorded_by: user.id,
+      })
+      .select('id')
+      .single();
+
+    if (payErr) {
+      if (payErr.message.includes('idx_payments_bar_order_completed') || payErr.code === '23505') {
+        throw new AppError('Duplicate payment detected by database constraint.', 'CONFLICT', 409);
+      }
+      throw payErr;
+    }
+
+    // If order was in PROCESSING, mark as COMPLETED
+    if (order.order_status === 'PROCESSING' && (order.kitchen_status === 'SERVED' || !order.tab_id)) {
+      await supabase
+        .from('bar_orders')
+        .update({ order_status: 'COMPLETED' })
+        .eq('id', validated.orderId);
+    }
+
+    revalidatePath('/dashboard/bar');
+    revalidatePath('/dashboard/payments');
+    revalidatePath('/dashboard/reports');
+
+    return {
+      success: true,
+      data: { paymentId: payment.id, paymentNumber },
+      message: `Payment ${paymentNumber} of ₹${validated.amount.toFixed(2)} recorded successfully.`,
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
