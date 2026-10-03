@@ -218,6 +218,7 @@ export async function createShopOrderAction(
 
     revalidatePath('/dashboard/shop');
     revalidatePath('/dashboard/inventory');
+    revalidatePath('/dashboard/portal');
     revalidatePath('/shop');
 
     return {

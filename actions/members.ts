@@ -1316,6 +1316,34 @@ export async function getMemberPortalDataAction(): Promise<ActionResult<MemberPo
       .eq('is_active', true)
       .order('price', { ascending: true });
 
+    // 9. Fetch active products & categories for Member Pro Shop
+    const [
+      { data: productsData },
+      { data: categoriesData },
+    ] = await Promise.all([
+      supabase
+        .from('products')
+        .select(`
+          id,
+          sku,
+          name,
+          description,
+          price,
+          low_stock_threshold,
+          is_active,
+          category_id,
+          image_url,
+          product_categories (name),
+          inventory (quantity_on_hand)
+        `)
+        .eq('is_active', true)
+        .order('name'),
+      supabase
+        .from('product_categories')
+        .select('id, name')
+        .order('name'),
+    ]);
+
     return {
       success: true,
       data: {
@@ -1329,6 +1357,8 @@ export async function getMemberPortalDataAction(): Promise<ActionResult<MemberPo
         history: (historyData as unknown as MembershipHistoryItem[]) || [],
         notifications: (notifData as unknown as NotificationItem[]) || [],
         availablePlans: (plansData as unknown as MembershipPlanItem[]) || [],
+        products: (productsData || []) as unknown as MemberPortalData['products'],
+        categories: (categoriesData || []) as unknown as MemberPortalData['categories'],
       },
     };
   } catch (err) {
