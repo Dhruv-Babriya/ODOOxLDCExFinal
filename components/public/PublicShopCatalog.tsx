@@ -323,6 +323,10 @@ export function PublicShopCatalog({ initialProducts, categories }: PublicShopCat
                     <img
                       src={prod.image_url}
                       alt={prod.name}
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src =
+                          'https://images.unsplash.com/photo-1517649763962-0c623266ddc0?auto=format&fit=crop&w=800&q=80';
+                      }}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
                   ) : (
