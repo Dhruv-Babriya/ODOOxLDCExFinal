@@ -465,3 +465,96 @@ export function calculateMembershipExpiryStatus(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Notifications & Member Portal Contracts (Phase 2)
+// ---------------------------------------------------------------------------
+export type NotificationType =
+  | 'INFO'
+  | 'SUCCESS'
+  | 'WARNING'
+  | 'ALERT'
+  | 'EXPIRY'
+  | 'BOOKING'
+  | 'FINANCE'
+  | 'ORDER';
+
+export interface NotificationItem {
+  id: string;
+  user_id: string;
+  title: string;
+  message: string;
+  type: NotificationType;
+  link: string | null;
+  is_read: boolean;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface MemberPortalData {
+  member: MemberWithDetails;
+  upcomingBookings: Array<{
+    id: string;
+    court_id: string;
+    court_name: string;
+    sport_type: SportType;
+    is_indoor: boolean;
+    start_time: string;
+    end_time: string;
+    booking_type: string;
+    status: string;
+    total_price: number;
+    notes: string | null;
+  }>;
+  pastBookings: Array<{
+    id: string;
+    court_id: string;
+    court_name: string;
+    sport_type: SportType;
+    start_time: string;
+    end_time: string;
+    booking_type: string;
+    status: string;
+    total_price: number;
+  }>;
+  shopOrders: Array<{
+    id: string;
+    order_number: string;
+    channel: string;
+    total_amount: number;
+    status: string;
+    payment_status: string;
+    created_at: string;
+    items_count: number;
+    items_summary: string;
+  }>;
+  customerTabs: Array<{
+    id: string;
+    tab_number: string;
+    credit_limit: number;
+    current_balance: number;
+    status: string;
+    opened_at: string;
+  }>;
+  invoices: Array<{
+    id: string;
+    invoice_number: string;
+    total_amount: number;
+    paid_amount: number;
+    status: string;
+    due_date: string;
+    created_at: string;
+  }>;
+  payments: Array<{
+    id: string;
+    receipt_number: string;
+    amount: number;
+    payment_method: string;
+    status: string;
+    created_at: string;
+    reference_id: string | null;
+  }>;
+  history: MembershipHistoryItem[];
+  notifications: NotificationItem[];
+}
+
+

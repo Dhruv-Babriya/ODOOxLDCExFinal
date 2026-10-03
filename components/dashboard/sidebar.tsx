@@ -19,6 +19,7 @@ import {
   BarChart3,
   Trophy,
   User,
+  Sparkles,
 } from 'lucide-react';
 
 interface SidebarItem {
@@ -33,6 +34,7 @@ const SIDEBAR_SECTIONS: { title: string; items: SidebarItem[] }[] = [
     title: 'Core Platform',
     items: [
       { href: '/dashboard', label: 'Overview', icon: LayoutDashboard, devOwner: 'Dev 1/4' },
+      { href: '/dashboard/portal', label: 'Member Portal', icon: Sparkles, devOwner: 'Dev 1' },
       { href: '/dashboard/members', label: 'Members', icon: Users, devOwner: 'Dev 1' },
       { href: '/dashboard/membership-plans', label: 'Plans & Pricing', icon: Shield, devOwner: 'Dev 1' },
       { href: '/dashboard/profile', label: 'User Profile', icon: User, devOwner: 'Dev 1' },

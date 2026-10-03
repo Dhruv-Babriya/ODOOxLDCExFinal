@@ -10,6 +10,7 @@ import {
 import { handleActionError } from '@/lib/errors';
 import { requirePermission } from '@/lib/auth/session';
 import type { ActionResult } from '@/types/shared';
+import type { Database } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
 
 // ---------------------------------------------------------------------------
@@ -34,7 +35,7 @@ export async function submitPublicEnquiryAction(
         full_name: validated.fullName,
         email: validated.email,
         phone: validated.phone,
-        interested_sport: validated.interestedSport || null,
+        interested_sport: (validated.interestedSport as Database['public']['Enums']['app_sport_type']) || null,
         interested_plan_id: validated.interestedPlanId || null,
         requested_trial_date: validated.requestedTrialDate || null,
         message: validated.message || null,
@@ -71,7 +72,12 @@ export async function updateEnquiryStatusAction(
     await requirePermission('enquiries:manage');
     const supabase = await createClient();
 
-    const updateData: Record<string, unknown> = { status };
+    const updateData: {
+      status: Database['public']['Enums']['app_enquiry_status'];
+      assigned_to?: string;
+    } = {
+      status: status as Database['public']['Enums']['app_enquiry_status'],
+    };
     if (assignedTo) updateData.assigned_to = assignedTo;
 
     const { error } = await supabase
@@ -115,7 +121,7 @@ export async function createQuoteAction(
         membership_plan_id: validated.membershipPlanId || null,
         quoted_amount: validated.quotedAmount,
         valid_until: validated.validUntil,
-        status: validated.status || 'DRAFT',
+        status: (validated.status as Database['public']['Enums']['app_quote_status']) || 'DRAFT',
         created_by: user.id,
       })
       .select('id')
@@ -155,7 +161,7 @@ export async function updateQuoteStatusAction(
 
     const { error } = await supabase
       .from('quotes')
-      .update({ status })
+      .update({ status: status as Database['public']['Enums']['app_quote_status'] })
       .eq('id', quoteId);
 
     if (error) throw error;

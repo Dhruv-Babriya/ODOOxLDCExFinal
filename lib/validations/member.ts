@@ -56,6 +56,8 @@ export const memberRegisterSchema = z
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'End date must be YYYY-MM-DD'),
     emergencyContact: z.string().trim().optional().or(z.literal('')),
     notes: z.string().trim().optional().or(z.literal('')),
+    paymentMethod: z.enum(['CASH', 'CARD', 'UPI', 'UNPAID'] as const).default('CASH'),
+    paymentReference: z.string().trim().optional().or(z.literal('')),
   })
   .refine((data) => new Date(data.endDate) >= new Date(data.startDate), {
     message: 'End date must be on or after start date',
@@ -87,6 +89,8 @@ export const memberRenewalSchema = z
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Start date must be YYYY-MM-DD'),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'End date must be YYYY-MM-DD'),
     notes: z.string().trim().optional().or(z.literal('')),
+    paymentMethod: z.enum(['CASH', 'CARD', 'UPI', 'UNPAID'] as const).default('CASH'),
+    paymentReference: z.string().trim().optional().or(z.literal('')),
   })
   .refine((data) => new Date(data.endDate) >= new Date(data.startDate), {
     message: 'End date must be on or after start date',

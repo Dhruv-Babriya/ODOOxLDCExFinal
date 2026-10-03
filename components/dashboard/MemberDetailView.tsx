@@ -65,6 +65,8 @@ export function MemberDetailView({
     return d.toISOString().split('T')[0];
   };
   const [renewalEndDate, setRenewalEndDate] = useState(initialRenewalEndDate());
+  const [renewalPaymentMethod, setRenewalPaymentMethod] = useState<'CASH' | 'CARD' | 'UPI' | 'UNPAID'>('CASH');
+  const [renewalPaymentRef, setRenewalPaymentRef] = useState('');
   const [renewalNotes, setRenewalNotes] = useState('');
   const [renewalLoading, setRenewalLoading] = useState(false);
   const [renewalError, setRenewalError] = useState<string | null>(null);
@@ -102,6 +104,8 @@ export function MemberDetailView({
       startDate: renewalStartDate,
       endDate: renewalEndDate,
       notes: renewalNotes,
+      paymentMethod: renewalPaymentMethod,
+      paymentReference: renewalPaymentRef,
     });
 
     setRenewalLoading(false);
@@ -573,6 +577,30 @@ export function MemberDetailView({
                       required
                       value={renewalEndDate}
                       onChange={(e) => setRenewalEndDate(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-zinc-300">Payment Collection</label>
+                    <select
+                      className="flex h-10 w-full rounded-lg border border-zinc-700 bg-zinc-950/80 px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      value={renewalPaymentMethod}
+                      onChange={(e) => setRenewalPaymentMethod(e.target.value as 'CASH' | 'CARD' | 'UPI' | 'UNPAID')}
+                    >
+                      <option value="CASH">Cash (Desk Payment)</option>
+                      <option value="CARD">Debit / Credit Card</option>
+                      <option value="UPI">UPI / Net Banking</option>
+                      <option value="UNPAID">Pending / Invoice Later</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-zinc-300">Payment Reference / Txn #</label>
+                    <Input
+                      placeholder="e.g. UPI-55210 or Card Txn"
+                      value={renewalPaymentRef}
+                      onChange={(e) => setRenewalPaymentRef(e.target.value)}
                     />
                   </div>
                 </div>

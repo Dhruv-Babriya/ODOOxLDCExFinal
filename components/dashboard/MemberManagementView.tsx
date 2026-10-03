@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { registerMemberAction } from '@/actions/members';
+import { registerMemberAction, checkAndProcessMembershipExpiriesAction } from '@/actions/members';
 import type { MemberWithDetails, MembershipPlanItem } from '@/types/shared';
 import { formatDate } from '@/lib/utils';
 import {
@@ -21,6 +21,7 @@ import {
   X,
   Phone,
   Mail,
+  RefreshCw,
 } from 'lucide-react';
 
 interface MemberManagementViewProps {
@@ -53,9 +54,15 @@ export function MemberManagementView({ initialMembers, plans }: MemberManagement
   const [endDate, setEndDate] = useState(initialEndDate());
   const [emergencyContact, setEmergencyContact] = useState('');
   const [notes, setNotes] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'UPI' | 'UNPAID'>('CASH');
+  const [paymentReference, setPaymentReference] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Expiry scanner state
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanStatus, setScanStatus] = useState<string | null>(null);
 
   // Statistics calculation
   const totalCount = members.length;
@@ -96,6 +103,25 @@ export function MemberManagementView({ initialMembers, plans }: MemberManagement
     }
   };
 
+  const handleScanExpiries = async () => {
+    setIsScanning(true);
+    setScanStatus(null);
+    const result = await checkAndProcessMembershipExpiriesAction();
+    setIsScanning(false);
+
+    if (!result.success) {
+      setScanStatus(`Scan failed: ${result.error || 'Unknown error occurred'}`);
+      return;
+    }
+
+    setScanStatus(
+      `Sync Complete: ${result.data.expiredCount} memberships transitioned to EXPIRED, ${result.data.warningCount} alerts dispatched.`
+    );
+    setTimeout(() => {
+      window.location.reload();
+    }, 2000);
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -112,6 +138,8 @@ export function MemberManagementView({ initialMembers, plans }: MemberManagement
       endDate,
       emergencyContact,
       notes,
+      paymentMethod,
+      paymentReference,
     });
 
     setIsSubmitting(false);
@@ -131,13 +159,14 @@ export function MemberManagementView({ initialMembers, plans }: MemberManagement
       setPhone('');
       setEmergencyContact('');
       setNotes('');
+      setPaymentReference('');
       window.location.reload();
     }, 1200);
   };
 
   return (
     <div className="space-y-6">
-      {/* Header and Registration Trigger */}
+      {/* Header and Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight">Member Management</h1>
@@ -145,18 +174,42 @@ export function MemberManagementView({ initialMembers, plans }: MemberManagement
             Search, register, track lifecycle, and verify active membership privileges for The Champions Club.
           </p>
         </div>
-        <Button
-          variant="primary"
-          onClick={() => {
-            setMembershipNumber(`CC-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
-            setIsRegisterOpen(true);
-          }}
-          className="gap-2 shadow-lg shadow-emerald-950/40"
-        >
-          <UserPlus className="h-4 w-4" />
-          <span>Register New Member</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={handleScanExpiries}
+            isLoading={isScanning}
+            className="gap-2 text-xs border-zinc-700 bg-zinc-900/60 hover:bg-zinc-850"
+            title="Scan all members against today's date, transition expired memberships, and trigger notification alerts"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            <span>Scan & Sync Expiries</span>
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => {
+              setMembershipNumber(`CC-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
+              setIsRegisterOpen(true);
+            }}
+            className="gap-2 shadow-lg shadow-emerald-950/40 text-xs"
+          >
+            <UserPlus className="h-4 w-4" />
+            <span>Register New Member</span>
+          </Button>
+        </div>
       </div>
+
+      {scanStatus && (
+        <div className="p-3 rounded-lg bg-emerald-950/40 border border-emerald-800/80 text-xs text-emerald-300 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+            <span>{scanStatus}</span>
+          </div>
+          <button onClick={() => setScanStatus(null)} className="text-emerald-400 hover:text-white">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Overview Metric Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -495,6 +548,30 @@ export function MemberManagementView({ initialMembers, plans }: MemberManagement
                     value={emergencyContact}
                     onChange={(e) => setEmergencyContact(e.target.value)}
                   />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-zinc-300">Payment Collection</label>
+                    <select
+                      className="flex h-10 w-full rounded-lg border border-zinc-700 bg-zinc-950/80 px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      value={paymentMethod}
+                      onChange={(e) => setPaymentMethod(e.target.value as 'CASH' | 'CARD' | 'UPI' | 'UNPAID')}
+                    >
+                      <option value="CASH">Cash (Desk Payment)</option>
+                      <option value="CARD">Debit / Credit Card</option>
+                      <option value="UPI">UPI / Net Banking</option>
+                      <option value="UNPAID">Pending / Invoice Later</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-zinc-300">Payment Reference / Txn #</label>
+                    <Input
+                      placeholder="e.g. UPI-99882 or Card ending 4410"
+                      value={paymentReference}
+                      onChange={(e) => setPaymentReference(e.target.value)}
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-1">

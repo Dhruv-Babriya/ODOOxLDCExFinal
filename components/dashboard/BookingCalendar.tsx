@@ -73,11 +73,18 @@ export function BookingCalendar({ courts, userRole, userMemberId }: BookingCalen
   // Load availability when court or date changes
   useEffect(() => {
     if (!selectedCourt) return;
-    setLoadingAvailability(true);
-    setError(null);
-    setSelectedSlot(null);
+    let cancelled = false;
+
+    Promise.resolve().then(() => {
+      if (!cancelled) {
+        setLoadingAvailability(true);
+        setError(null);
+        setSelectedSlot(null);
+      }
+    });
 
     getCourtAvailabilityAction(selectedCourt.id, selectedDate).then((result) => {
+      if (cancelled) return;
       if (result.success) {
         setAvailability(result.data);
       } else {
@@ -85,6 +92,10 @@ export function BookingCalendar({ courts, userRole, userMemberId }: BookingCalen
       }
       setLoadingAvailability(false);
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedCourt, selectedDate]);
 
   // Load members for staff
