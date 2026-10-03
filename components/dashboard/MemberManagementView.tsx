@@ -22,6 +22,12 @@ import {
   Phone,
   Mail,
   RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Calendar,
+  ArrowUpDown,
 } from 'lucide-react';
 
 interface MemberManagementViewProps {
@@ -34,6 +40,9 @@ export function MemberManagementView({ initialMembers, plans }: MemberManagement
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [tierFilter, setTierFilter] = useState<string>('ALL');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'name'>('newest');
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
 
   // Registration Form State
@@ -72,8 +81,26 @@ export function MemberManagementView({ initialMembers, plans }: MemberManagement
     (m) => m.derived_status === 'EXPIRED' || m.status === 'EXPIRED'
   ).length;
 
+  // Sort members (default: newest members first)
+  const sortedMembers = [...members].sort((a, b) => {
+    if (sortOrder === 'oldest') {
+      const timeA = new Date(a.created_at || a.start_date).getTime();
+      const timeB = new Date(b.created_at || b.start_date).getTime();
+      return timeA - timeB;
+    }
+    if (sortOrder === 'name') {
+      const nameA = a.profiles?.full_name || '';
+      const nameB = b.profiles?.full_name || '';
+      return nameA.localeCompare(nameB);
+    }
+    // Default: 'newest'
+    const timeA = new Date(a.created_at || a.start_date).getTime();
+    const timeB = new Date(b.created_at || b.start_date).getTime();
+    return timeB - timeA;
+  });
+
   // Filtered members list
-  const filteredMembers = members.filter((m) => {
+  const filteredMembers = sortedMembers.filter((m) => {
     const q = searchQuery.toLowerCase().trim();
     const matchesSearch =
       !q ||
@@ -92,6 +119,48 @@ export function MemberManagementView({ initialMembers, plans }: MemberManagement
 
     return matchesSearch && matchesStatus && matchesTier;
   });
+
+  // Pagination calculations: 20 per page by default
+  const totalFiltered = filteredMembers.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
+  const safePage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = totalFiltered === 0 ? 0 : (safePage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalFiltered);
+  const paginatedMembers = filteredMembers.slice(startIndex, endIndex);
+
+  // Search/Filter helper handlers that reset pagination to page 1
+  const handleSearchChange = (val: string) => {
+    setSearchQuery(val);
+    setCurrentPage(1);
+  };
+
+  const handleStatusChange = (val: string) => {
+    setStatusFilter(val);
+    setCurrentPage(1);
+  };
+
+  const handleTierChange = (val: string) => {
+    setTierFilter(val);
+    setCurrentPage(1);
+  };
+
+  const handleSortChange = (val: 'newest' | 'oldest' | 'name') => {
+    setSortOrder(val);
+    setCurrentPage(1);
+  };
+
+  const handlePageSizeChange = (val: number) => {
+    setPageSize(val);
+    setCurrentPage(1);
+  };
+
+  const handleResetFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('ALL');
+    setTierFilter('ALL');
+    setSortOrder('newest');
+    setCurrentPage(1);
+  };
 
   const handlePlanChange = (planId: string) => {
     setSelectedPlanId(planId);
@@ -252,25 +321,25 @@ export function MemberManagementView({ initialMembers, plans }: MemberManagement
 
       {/* Filter and Search Bar */}
       <Card className="border-zinc-800 bg-zinc-900/50">
-        <CardContent className="p-4 flex flex-col md:flex-row gap-3 items-center justify-between">
-          <div className="relative w-full md:w-96">
+        <CardContent className="p-4 flex flex-col lg:flex-row gap-3 items-center justify-between">
+          <div className="relative w-full lg:w-96">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-400" />
             <Input
               placeholder="Search by name, email, phone, or #CC ID..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-9 bg-zinc-950/60 text-xs"
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+          <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
             <div className="flex items-center gap-1.5 text-xs text-zinc-400">
               <Filter className="h-3.5 w-3.5" />
               <span>Status:</span>
               <select
                 className="h-8 rounded-lg border border-zinc-700 bg-zinc-950/80 px-2.5 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={(e) => handleStatusChange(e.target.value)}
               >
                 <option value="ALL">All Statuses</option>
                 <option value="ACTIVE">Active</option>
@@ -286,7 +355,7 @@ export function MemberManagementView({ initialMembers, plans }: MemberManagement
               <select
                 className="h-8 rounded-lg border border-zinc-700 bg-zinc-950/80 px-2.5 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 value={tierFilter}
-                onChange={(e) => setTierFilter(e.target.value)}
+                onChange={(e) => handleTierChange(e.target.value)}
               >
                 <option value="ALL">All Tiers</option>
                 <option value="GOLD">Gold</option>
@@ -295,15 +364,38 @@ export function MemberManagementView({ initialMembers, plans }: MemberManagement
               </select>
             </div>
 
-            {(searchQuery || statusFilter !== 'ALL' || tierFilter !== 'ALL') && (
+            <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+              <ArrowUpDown className="h-3.5 w-3.5" />
+              <span>Sort:</span>
+              <select
+                className="h-8 rounded-lg border border-zinc-700 bg-zinc-950/80 px-2.5 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                value={sortOrder}
+                onChange={(e) => handleSortChange(e.target.value as 'newest' | 'oldest' | 'name')}
+              >
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="name">Name (A-Z)</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+              <span>Per page:</span>
+              <select
+                className="h-8 rounded-lg border border-zinc-700 bg-zinc-950/80 px-2.5 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                value={pageSize}
+                onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+              >
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+
+            {(searchQuery || statusFilter !== 'ALL' || tierFilter !== 'ALL' || sortOrder !== 'newest') && (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => {
-                  setSearchQuery('');
-                  setStatusFilter('ALL');
-                  setTierFilter('ALL');
-                }}
+                onClick={handleResetFilters}
                 className="text-xs text-zinc-400 hover:text-zinc-200 h-8 px-2"
               >
                 Reset
@@ -315,103 +407,225 @@ export function MemberManagementView({ initialMembers, plans }: MemberManagement
 
       {/* Member Table */}
       <Card className="border-zinc-800 bg-zinc-900/50">
-        <CardHeader className="flex flex-row items-center justify-between pb-3">
-          <CardTitle className="text-base text-white">Member Directory</CardTitle>
-          <Badge variant="outline" className="text-xs font-mono">
-            {filteredMembers.length} of {totalCount} records
-          </Badge>
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-zinc-800/60">
+          <div>
+            <CardTitle className="text-base text-white">Member Directory</CardTitle>
+            <p className="text-xs text-zinc-400 mt-0.5">
+              Browse, filter, and inspect enrolled athletic club memberships.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-xs font-mono">
+              Page {safePage} of {totalPages}
+            </Badge>
+            <Badge variant="outline" className="text-xs font-mono text-emerald-400 border-emerald-800/50">
+              {totalFiltered} {totalFiltered === 1 ? 'member' : 'members'}
+            </Badge>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-4">
           {filteredMembers.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
-                <thead className="border-b border-zinc-800 text-zinc-400 font-semibold uppercase tracking-wider">
-                  <tr>
-                    <th className="py-3 px-3">Member ID</th>
-                    <th className="py-3 px-3">Full Name & Contact</th>
-                    <th className="py-3 px-3">Plan / Tier</th>
-                    <th className="py-3 px-3">Derived Status</th>
-                    <th className="py-3 px-3">Validity Period</th>
-                    <th className="py-3 px-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800/60">
-                  {filteredMembers.map((m) => {
-                    const tier = m.membership_plans?.tier;
-                    const isExpiringSoon = m.derived_status === 'EXPIRING_SOON';
-                    const isExpired = m.derived_status === 'EXPIRED';
+            <>
+              <div className="overflow-x-auto rounded-lg border border-zinc-800/60">
+                <table className="w-full text-xs text-left">
+                  <thead className="border-b border-zinc-800 bg-zinc-950/60 text-zinc-400 font-semibold uppercase tracking-wider">
+                    <tr>
+                      <th className="py-3 px-3">Member Name & ID</th>
+                      <th className="py-3 px-3">Type of Membership</th>
+                      <th className="py-3 px-3">Starting Date</th>
+                      <th className="py-3 px-3">Ending Date</th>
+                      <th className="py-3 px-3">Status</th>
+                      <th className="py-3 px-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800/60">
+                    {paginatedMembers.map((m) => {
+                      const tier = m.membership_plans?.tier;
+                      const isExpiringSoon = m.derived_status === 'EXPIRING_SOON';
+                      const isExpired = m.derived_status === 'EXPIRED';
 
-                    return (
-                      <tr key={m.id} className="hover:bg-zinc-800/30 transition-colors">
-                        <td className="py-3 px-3 font-mono font-semibold text-emerald-400">
-                          {m.membership_number}
-                        </td>
-                        <td className="py-3 px-3">
-                          <div className="font-medium text-zinc-200">{m.profiles?.full_name}</div>
-                          <div className="flex items-center gap-3 text-[11px] text-zinc-400 mt-0.5">
-                            <span className="flex items-center gap-1">
-                              <Mail className="h-3 w-3 text-zinc-500" />
-                              {m.profiles?.email}
-                            </span>
-                            {m.profiles?.phone && (
-                              <span className="flex items-center gap-1">
-                                <Phone className="h-3 w-3 text-zinc-500" />
-                                {m.profiles?.phone}
+                      return (
+                        <tr key={m.id} className="hover:bg-zinc-800/30 transition-colors">
+                          <td className="py-3.5 px-3">
+                            <div className="font-semibold text-zinc-100 flex items-center gap-2">
+                              <span>{m.profiles?.full_name || 'Anonymous Member'}</span>
+                              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-emerald-400 border border-zinc-700/60 font-medium">
+                                {m.membership_number}
                               </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-3 text-[11px] text-zinc-400 mt-1">
+                              <span className="flex items-center gap-1">
+                                <Mail className="h-3 w-3 text-zinc-500" />
+                                {m.profiles?.email || 'No email'}
+                              </span>
+                              {m.profiles?.phone && (
+                                <span className="flex items-center gap-1">
+                                  <Phone className="h-3 w-3 text-zinc-500" />
+                                  {m.profiles?.phone}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-3">
+                            <div className="font-medium text-zinc-200">
+                              {m.membership_plans?.name || 'Standard Plan'}
+                            </div>
+                            <Badge
+                              variant={
+                                tier === 'GOLD' ? 'gold' : tier === 'SILVER' ? 'silver' : 'outline'
+                              }
+                              className="text-[9px] mt-1 font-semibold"
+                            >
+                              {tier || 'MEMBER'}
+                            </Badge>
+                          </td>
+                          <td className="py-3.5 px-3 text-zinc-300">
+                            <div className="flex items-center gap-1.5">
+                              <Calendar className="h-3.5 w-3.5 text-emerald-500/70" />
+                              <span className="font-medium">{formatDate(m.start_date)}</span>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-3 text-zinc-300">
+                            <div className="flex items-center gap-1.5">
+                              <Calendar className="h-3.5 w-3.5 text-amber-500/70" />
+                              <span className="font-medium">{formatDate(m.end_date)}</span>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-3">
+                            {isExpiringSoon ? (
+                              <Badge variant="warning" className="text-[10px]">
+                                Expiring Soon ({m.days_remaining}d)
+                              </Badge>
+                            ) : isExpired ? (
+                              <Badge variant="destructive" className="text-[10px]">
+                                Expired ({Math.abs(m.days_remaining)}d ago)
+                              </Badge>
+                            ) : m.status === 'ACTIVE' ? (
+                              <Badge variant="success" className="text-[10px]">
+                                Active ({m.days_remaining}d left)
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-[10px]">
+                                {m.status}
+                              </Badge>
                             )}
-                          </div>
-                        </td>
-                        <td className="py-3 px-3">
-                          <div className="font-medium text-zinc-300">
-                            {m.membership_plans?.name || 'Standard'}
-                          </div>
-                          <Badge
-                            variant={
-                              tier === 'GOLD' ? 'gold' : tier === 'SILVER' ? 'silver' : 'outline'
-                            }
-                            className="text-[9px] mt-0.5"
+                          </td>
+                          <td className="py-3.5 px-3 text-right">
+                            <Link href={`/dashboard/members/${m.id}`}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs gap-1 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/30"
+                              >
+                                <span>Details</span>
+                                <ArrowRight className="h-3 w-3" />
+                              </Button>
+                            </Link>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination Controls Footer */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 text-xs text-zinc-400">
+                <div className="flex items-center gap-2">
+                  <span>
+                    Showing <strong className="text-zinc-200">{startIndex + 1}</strong> to{' '}
+                    <strong className="text-zinc-200">{endIndex}</strong> of{' '}
+                    <strong className="text-zinc-200">{totalFiltered}</strong> members
+                    {totalFiltered !== totalCount && ` (filtered from ${totalCount})`}
+                  </span>
+                  <span className="text-zinc-600">|</span>
+                  <span className="text-zinc-400">
+                    Page <strong className="text-zinc-200">{safePage}</strong> of{' '}
+                    <strong className="text-zinc-200">{totalPages}</strong>
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(1)}
+                    disabled={safePage <= 1}
+                    className="h-8 px-2 text-xs border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 disabled:opacity-40"
+                    title="First Page"
+                  >
+                    <ChevronsLeft className="h-3.5 w-3.5 mr-1" />
+                    First
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={safePage <= 1}
+                    className="h-8 px-2.5 text-xs border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 disabled:opacity-40"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5 mr-1" />
+                    Previous
+                  </Button>
+
+                  {/* Page numbers (up to 5 pages around current) */}
+                  <div className="hidden sm:flex items-center gap-1 px-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter((p) => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+                      .reduce<Array<number | string>>((acc, p, idx, arr) => {
+                        if (idx > 0 && p - (arr[idx - 1] as number) > 1) {
+                          acc.push('...');
+                        }
+                        acc.push(p);
+                        return acc;
+                      }, [])
+                      .map((item, idx) =>
+                        item === '...' ? (
+                          <span key={`dots-${idx}`} className="px-1 text-zinc-600">
+                            ...
+                          </span>
+                        ) : (
+                          <Button
+                            key={`page-${item}`}
+                            variant={safePage === item ? 'primary' : 'outline'}
+                            size="sm"
+                            onClick={() => setCurrentPage(item as number)}
+                            className={`h-8 w-8 p-0 text-xs ${
+                              safePage === item
+                                ? 'bg-emerald-600 hover:bg-emerald-500 text-white font-bold'
+                                : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                            }`}
                           >
-                            {tier || 'MEMBER'}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-3">
-                          {isExpiringSoon ? (
-                            <Badge variant="warning" className="text-[10px]">
-                              Expiring Soon ({m.days_remaining}d)
-                            </Badge>
-                          ) : isExpired ? (
-                            <Badge variant="destructive" className="text-[10px]">
-                              Expired ({Math.abs(m.days_remaining)}d ago)
-                            </Badge>
-                          ) : m.status === 'ACTIVE' ? (
-                            <Badge variant="success" className="text-[10px]">
-                              Active ({m.days_remaining}d left)
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-[10px]">
-                              {m.status}
-                            </Badge>
-                          )}
-                        </td>
-                        <td className="py-3 px-3 text-zinc-400">
-                          <div>
-                            {formatDate(m.start_date)} → {formatDate(m.end_date)}
-                          </div>
-                        </td>
-                        <td className="py-3 px-3 text-right">
-                          <Link href={`/dashboard/members/${m.id}`}>
-                            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-emerald-400 hover:text-emerald-300">
-                              <span>Details</span>
-                              <ArrowRight className="h-3 w-3" />
-                            </Button>
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                            {item}
+                          </Button>
+                        )
+                      )}
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={safePage >= totalPages}
+                    className="h-8 px-2.5 text-xs border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 disabled:opacity-40"
+                  >
+                    Next
+                    <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={safePage >= totalPages}
+                    className="h-8 px-2 text-xs border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 disabled:opacity-40"
+                    title="Last Page"
+                  >
+                    Last
+                    <ChevronsRight className="h-3.5 w-3.5 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            </>
           ) : (
             <div className="text-center py-12 space-y-3 text-zinc-400 text-xs">
               <Users className="h-10 w-10 text-zinc-600 mx-auto" />
