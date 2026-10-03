@@ -2,10 +2,6 @@
 
 import { headers } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
-<<<<<<< HEAD
-import { loginSchema, registerSchema, type LoginInput, type RegisterInput } from '@/lib/validations/auth';
-import { handleActionError, sanitizeErrorMessage } from '@/lib/errors';
-=======
 import {
   loginSchema,
   registerSchema,
@@ -16,8 +12,7 @@ import {
   type PasswordResetRequestInput,
   type PasswordResetInput,
 } from '@/lib/validations/auth';
-import { handleActionError } from '@/lib/errors';
->>>>>>> b407187ac8e8bd84f05b54016da6d4270ff60fcf
+import { handleActionError, sanitizeErrorMessage } from '@/lib/errors';
 import type { ActionResult } from '@/types/shared';
 import { revalidatePath } from 'next/cache';
 import {

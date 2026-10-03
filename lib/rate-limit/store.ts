@@ -91,7 +91,6 @@ export class RateLimitMemoryStore {
     record.updatedAt = now;
 
     const count = record.timestamps.length;
-    const remaining = Math.max(0, limit - count);
 
     // Calculate reset time based on the oldest timestamp in window
     let resetSeconds = windowSeconds;
@@ -212,7 +211,6 @@ export class RateLimitMemoryStore {
 
 // Global singleton preservation for Next.js environments
 declare global {
-  // eslint-disable-next-line no-var
   var __rateLimitStore: RateLimitMemoryStore | undefined;
 }
 
