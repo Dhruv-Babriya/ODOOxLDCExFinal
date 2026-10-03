@@ -37,7 +37,10 @@ export function DashboardHeader({
       </div>
 
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2.5 pr-2 border-r border-zinc-800">
+        <Link
+          href="/dashboard/profile"
+          className="flex items-center gap-2.5 pr-2 border-r border-zinc-800 hover:opacity-80 transition-opacity"
+        >
           <div className="h-8 w-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-semibold text-emerald-400">
             <User className="h-4 w-4" />
           </div>
@@ -50,7 +53,7 @@ export function DashboardHeader({
               </Badge>
             </div>
           </div>
-        </div>
+        </Link>
 
         <Button
           variant="ghost"
