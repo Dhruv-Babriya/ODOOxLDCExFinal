@@ -148,30 +148,63 @@ export async function createManagerAction(
     const validated = managerCreateSchema.parse(input);
     const supabase = await createClient();
 
+    // Ensure session is active and auth headers are attached for PostgREST RPC
+    const {
+      data: { user: authUser },
+      error: userAuthError,
+    } = await supabase.auth.getUser();
+
+    if (userAuthError || !authUser) {
+      return {
+        success: false,
+        error: 'Your session has expired or is invalid. Please sign in again as Club Owner.',
+        code: 'UNAUTHENTICATED',
+      };
+    }
+
     const rpcClient = supabase.rpc as unknown as (
       fn: string,
       args: Record<string, unknown>
-    ) => Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>;
+    ) => Promise<{
+      data: Record<string, unknown> | null;
+      error: { message: string; code?: string; details?: string } | null;
+    }>;
 
     const { data: result, error: rpcError } = await rpcClient('onboard_staff_direct', {
-      p_email: validated.email,
+      p_email: validated.email.trim().toLowerCase(),
       p_password: validated.password,
-      p_full_name: validated.fullName,
-      p_phone: validated.phone || null,
+      p_full_name: validated.fullName.trim(),
+      p_phone: validated.phone?.trim() || null,
       p_role: 'ADMIN', // Strictly ADMIN role
-      p_employee_code: validated.employeeCode,
+      p_employee_code: validated.employeeCode.trim(),
       p_department: validated.department,
-      p_position: validated.position,
+      p_position: validated.position.trim(),
       p_hourly_rate: 0,
       p_salary_monthly: validated.salaryMonthly,
       p_hire_date: validated.hireDate,
     });
 
     if (rpcError) {
+      let friendlyError = rpcError.message;
+      const lowerMsg = (rpcError.message || '').toLowerCase();
+      const lowerDetails = (rpcError.details || '').toLowerCase();
+
+      if (rpcError.code === '23505' || lowerMsg.includes('duplicate key') || lowerMsg.includes('unique constraint')) {
+        if (lowerDetails.includes('email') || lowerMsg.includes('email')) {
+          friendlyError = `A user or manager with email "${validated.email}" already exists.`;
+        } else if (lowerDetails.includes('employee_code') || lowerMsg.includes('employee_code')) {
+          friendlyError = `Employee code "${validated.employeeCode}" is already in use. Please enter a different code.`;
+        } else {
+          friendlyError = 'A record with this identifier already exists.';
+        }
+      } else if (rpcError.code === '42501' || lowerMsg.includes('access denied')) {
+        friendlyError = 'Access denied: Only authenticated Club Owners can provision new managers.';
+      }
+
       return {
         success: false,
-        error: rpcError.message,
-        code: 'MANAGER_CREATION_FAILED',
+        error: friendlyError,
+        code: rpcError.code || 'MANAGER_CREATION_FAILED',
       };
     }
 

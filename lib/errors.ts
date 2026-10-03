@@ -10,6 +10,7 @@ export class AppError extends Error {
   ) {
     super(message);
     this.name = 'AppError';
+    Object.setPrototypeOf(this, new.target.prototype);
   }
 }
 
@@ -59,38 +60,68 @@ export function handleActionError(error: unknown): ActionResult<never> {
     }
   }
 
-  // Console log internal error details on the server (never send raw details to client)
+  // Console log internal error details on the server
   console.error('[Server Action Error]:', error);
 
-  if (error instanceof ZodError) {
-    const fieldErrors: Record<string, string[]> = {};
-    error.issues.forEach((issue) => {
-      const path = issue.path.join('.') || 'general';
-      if (!fieldErrors[path]) {
-        fieldErrors[path] = [];
-      }
-      fieldErrors[path].push(issue.message);
-    });
+  // 1. Zod validation error (duck-typed for cross-bundle prototype preservation)
+  const isZod =
+    error instanceof ZodError ||
+    (typeof error === 'object' &&
+      error !== null &&
+      (('name' in error && (error as { name?: unknown }).name === 'ZodError') ||
+        'issues' in error));
 
+  if (isZod) {
+    const zodErr = error as ZodError;
+    const fieldErrors: Record<string, string[]> = {};
+    if (Array.isArray(zodErr.issues)) {
+      zodErr.issues.forEach((issue) => {
+        const path = issue.path?.join('.') || 'general';
+        if (!fieldErrors[path]) {
+          fieldErrors[path] = [];
+        }
+        fieldErrors[path].push(issue.message);
+      });
+    }
+
+    const firstMsg = Array.isArray(zodErr.issues) && zodErr.issues[0]?.message;
     return {
       success: false,
-      error: 'Validation failed. Please check your inputs.',
+      error: firstMsg ? `Validation failed: ${firstMsg}` : 'Validation failed. Please check your inputs.',
       code: 'VALIDATION_ERROR',
       fieldErrors,
     };
   }
 
-  if (error instanceof AppError) {
+  // 2. AppError hierarchy (duck-typed for cross-bundle prototype preservation)
+  const isAppErr =
+    error instanceof AppError ||
+    (typeof error === 'object' &&
+      error !== null &&
+      'name' in error &&
+      typeof (error as { name?: unknown }).name === 'string' &&
+      [
+        'AppError',
+        'AuthenticationError',
+        'AuthorizationError',
+        'NotFoundError',
+        'ConflictError',
+        'BookingConcurrencyError',
+      ].includes((error as { name: string }).name) &&
+      'message' in error);
+
+  if (isAppErr) {
+    const appErr = error as { message: string; code?: string };
     return {
       success: false,
-      error: error.message,
-      code: error.code,
+      error: appErr.message,
+      code: appErr.code || 'BAD_REQUEST',
     };
   }
 
-  // Handle standard PostgreSQL errors
+  // 3. PostgreSQL & Supabase PostgREST error codes
   if (typeof error === 'object' && error !== null && 'code' in error) {
-    const pgError = error as { code: string; message: string; details?: string };
+    const pgError = error as { code: string; message?: string; details?: string; hint?: string };
 
     // 23P01 = exclusion_violation (Exclusion constraint triggered!)
     if (pgError.code === '23P01') {
@@ -103,10 +134,47 @@ export function handleActionError(error: unknown): ActionResult<never> {
 
     // 23505 = unique_violation
     if (pgError.code === '23505') {
+      const details = (pgError.details || pgError.message || '').toLowerCase();
+      let errorMsg = 'A record with this identifier already exists.';
+      if (details.includes('email')) {
+        errorMsg = 'An account or profile with this email address already exists.';
+      } else if (details.includes('employee_code') || details.includes('staff_employee_code')) {
+        errorMsg = 'This employee code is already assigned to an existing staff member.';
+      } else if (details.includes('phone')) {
+        errorMsg = 'This phone number is already registered.';
+      }
+
       return {
         success: false,
-        error: 'A record with this identifier already exists.',
+        error: errorMsg,
         code: 'DUPLICATE_ENTRY',
+      };
+    }
+
+    // 23503 = foreign_key_violation
+    if (pgError.code === '23503') {
+      return {
+        success: false,
+        error: 'Referenced user or record was not found.',
+        code: 'FOREIGN_KEY_VIOLATION',
+      };
+    }
+
+    // 23502 = not_null_violation
+    if (pgError.code === '23502') {
+      return {
+        success: false,
+        error: 'A required field was missing. Please fill in all required fields.',
+        code: 'NOT_NULL_VIOLATION',
+      };
+    }
+
+    // 42501 = insufficient_privilege
+    if (pgError.code === '42501') {
+      return {
+        success: false,
+        error: 'Database permission denied. You do not have sufficient privileges.',
+        code: 'FORBIDDEN',
       };
     }
 
@@ -127,9 +195,29 @@ export function handleActionError(error: unknown): ActionResult<never> {
         code: 'INSUFFICIENT_STOCK',
       };
     }
+
+    if (pgError.message) {
+      return {
+        success: false,
+        error: pgError.message,
+        code: pgError.code || 'DATABASE_ERROR',
+      };
+    }
   }
 
-  // Fallback generic error
+  // 4. Standard Error instance or object with descriptive message
+  if (error instanceof Error || (typeof error === 'object' && error !== null && 'message' in error)) {
+    const errObj = error as { message?: unknown; code?: unknown };
+    if (typeof errObj.message === 'string' && errObj.message.trim().length > 0) {
+      return {
+        success: false,
+        error: errObj.message,
+        code: typeof errObj.code === 'string' ? errObj.code : 'INTERNAL_SERVER_ERROR',
+      };
+    }
+  }
+
+  // 5. Fallback generic error only if no meaningful message is available
   return {
     success: false,
     error: 'An unexpected error occurred. Please try again later.',
