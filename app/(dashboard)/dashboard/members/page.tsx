@@ -7,8 +7,8 @@ import { MemberManagementView } from '@/components/dashboard/MemberManagementVie
 export default async function MembersDashboardPage() {
   const user = await requireAuth();
 
-  // Exclusively accessible to Owner portal and General Manager
-  if (user.role !== 'OWNER' && user.role !== 'ADMIN') {
+  // Accessible to Owner, Admin (General Manager), and Front Desk Staff
+  if (user.role !== 'OWNER' && user.role !== 'ADMIN' && user.role !== 'FRONT_DESK') {
     redirect('/dashboard/unauthorized');
   }
 

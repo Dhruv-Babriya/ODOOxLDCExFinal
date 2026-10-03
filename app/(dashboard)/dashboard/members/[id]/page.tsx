@@ -1,7 +1,7 @@
 import { getMemberDetailsAction } from '@/actions/members';
 import { getMembershipPlansAction } from '@/actions/plans';
 import { MemberDetailView } from '@/components/dashboard/MemberDetailView';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 
 export default async function MemberDetailPage({
   params,
@@ -9,6 +9,9 @@ export default async function MemberDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  if (id === 'new') {
+    redirect('/dashboard/members/new');
+  }
   const [detailsRes, plansRes] = await Promise.all([
     getMemberDetailsAction(id),
     getMembershipPlansAction(),
