@@ -1456,6 +1456,50 @@ export type Database = {
         }
         Returns: string
       }
+      reschedule_court_booking: {
+        Args: {
+          p_booking_id: string
+          p_new_base_price: number
+          p_new_court_id: string
+          p_new_discount_amount: number
+          p_new_end_time: string
+          p_new_final_price: number
+          p_new_start_time: string
+          p_notes?: string | null
+        }
+        Returns: string
+      }
+      add_booking_participant: {
+        Args: {
+          p_booking_id: string
+          p_guest_name?: string | null
+          p_member_id?: string | null
+        }
+        Returns: string
+      }
+      remove_booking_participant: {
+        Args: {
+          p_participant_id: string
+        }
+        Returns: boolean
+      }
+      record_booking_payment: {
+        Args: {
+          p_amount: number
+          p_booking_id: string
+          p_member_id: string | null
+          p_payment_method: Database["public"]["Enums"]["app_payment_method"]
+          p_transaction_reference?: string | null
+        }
+        Returns: string
+      }
+      cancel_court_booking: {
+        Args: {
+          p_booking_id: string
+          p_reason: string
+        }
+        Returns: boolean
+      }
       adjust_inventory: {
         Args: {
           p_notes?: string | null

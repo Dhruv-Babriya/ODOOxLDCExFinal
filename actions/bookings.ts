@@ -3,18 +3,26 @@
 import { createClient } from '@/lib/supabase/server';
 import {
   courtBookingCreateSchema,
+  bookingRescheduleSchema,
   bookingCancellationSchema,
   addParticipantSchema,
+  removeParticipantSchema,
+  bookingPricePreviewSchema,
+  bookingPaymentSchema,
   courtCreateSchema,
   courtUpdateSchema,
   type CourtBookingCreateInput,
+  type BookingRescheduleInput,
   type BookingCancellationInput,
   type AddParticipantInput,
+  type RemoveParticipantInput,
+  type BookingPricePreviewInput,
+  type BookingPaymentInput,
   type CourtCreateInput,
   type CourtUpdateInput,
 } from '@/lib/validations/booking';
 import { handleActionError, BookingConcurrencyError, AppError } from '@/lib/errors';
-import { requireAuth, requireRole, requirePermission } from '@/lib/auth/session';
+import { requireAuth, requirePermission } from '@/lib/auth/session';
 import { calculateCourtPrice } from '@/lib/pricing';
 import type { ActionResult } from '@/types/shared';
 import { revalidatePath } from 'next/cache';
@@ -30,7 +38,7 @@ export async function createCourtAction(
   input: CourtCreateInput
 ): Promise<ActionResult<{ courtId: string }>> {
   try {
-    const user = await requirePermission('courts:manage');
+    await requirePermission('courts:manage');
     const validated = courtCreateSchema.parse(input);
     const supabase = await createClient();
 
@@ -67,7 +75,7 @@ export async function updateCourtAction(
   input: CourtUpdateInput
 ): Promise<ActionResult<{ courtId: string }>> {
   try {
-    const user = await requirePermission('courts:manage');
+    await requirePermission('courts:manage');
     const validated = courtUpdateSchema.parse(input);
     const supabase = await createClient();
 
@@ -102,6 +110,140 @@ export async function updateCourtAction(
 }
 
 // ---------------------------------------------------------------------------
+// LIVE PRICING PREVIEW ACTION (Phase 2)
+// ---------------------------------------------------------------------------
+
+export interface PricePreviewResult {
+  hourlyRate: number;
+  basePrice: number;
+  discountAmount: number;
+  finalPrice: number;
+  discountPercent: number;
+  isFreeBenefit: boolean;
+  tier: string;
+  hoursBookedToday: number;
+}
+
+/**
+ * Server-side calculation of booking pricing before confirmation.
+ */
+export async function previewBookingPriceAction(
+  input: BookingPricePreviewInput
+): Promise<ActionResult<PricePreviewResult>> {
+  try {
+    const validated = bookingPricePreviewSchema.parse(input);
+    await requireAuth();
+    const supabase = await createClient();
+
+    // 1. Fetch court hourly rate
+    const { data: court, error: courtError } = await supabase
+      .from('courts')
+      .select('id, hourly_rate')
+      .eq('id', validated.courtId)
+      .single();
+
+    if (courtError || !court) {
+      throw new AppError('Court not found', 'NOT_FOUND', 404);
+    }
+
+    const hourlyRate = Number(court.hourly_rate);
+
+    // 2. Resolve member and plan if memberId is given
+    if (!validated.memberId) {
+      const guestPricing = calculateCourtPrice({ hourlyRate });
+      return {
+        success: true,
+        data: {
+          hourlyRate,
+          basePrice: guestPricing.basePrice,
+          discountAmount: guestPricing.discountAmount,
+          finalPrice: guestPricing.finalPrice,
+          discountPercent: 0,
+          isFreeBenefit: false,
+          tier: 'GUEST',
+          hoursBookedToday: 0,
+        },
+      };
+    }
+
+    const { data: member } = await supabase
+      .from('members')
+      .select(`
+        id,
+        status,
+        membership_plans (
+          tier,
+          court_discount_percent,
+          free_court_hours_per_day
+        )
+      `)
+      .eq('id', validated.memberId)
+      .single();
+
+    if (!member || member.status !== 'ACTIVE' || !member.membership_plans) {
+      const guestPricing = calculateCourtPrice({ hourlyRate });
+      return {
+        success: true,
+        data: {
+          hourlyRate,
+          basePrice: guestPricing.basePrice,
+          discountAmount: guestPricing.discountAmount,
+          finalPrice: guestPricing.finalPrice,
+          discountPercent: 0,
+          isFreeBenefit: false,
+          tier: 'STANDARD',
+          hoursBookedToday: 0,
+        },
+      };
+    }
+
+    const plan = member.membership_plans as {
+      tier: string;
+      court_discount_percent: number;
+      free_court_hours_per_day: number;
+    };
+
+    // Count today's non-cancelled bookings
+    const bookingDate = new Date(validated.startTime).toISOString().split('T')[0];
+    const { count } = await supabase
+      .from('court_bookings')
+      .select('id', { count: 'exact', head: true })
+      .eq('member_id', validated.memberId)
+      .gte('start_time', `${bookingDate}T00:00:00Z`)
+      .lt('start_time', `${bookingDate}T23:59:59.999Z`)
+      .neq('status', 'CANCELLED');
+
+    const hoursBookedToday = count || 0;
+
+    const pricing = calculateCourtPrice({
+      hourlyRate,
+      plan: {
+        tier: plan.tier as 'GOLD' | 'SILVER' | 'JUNIOR',
+        courtDiscountPercent: Number(plan.court_discount_percent),
+        freeCourtHoursPerDay: plan.free_court_hours_per_day,
+      },
+      hoursBookedToday,
+    });
+
+    return {
+      success: true,
+      data: {
+        hourlyRate,
+        basePrice: pricing.basePrice,
+        discountAmount: pricing.discountAmount,
+        finalPrice: pricing.finalPrice,
+        discountPercent: Number(plan.court_discount_percent),
+        isFreeBenefit: pricing.isFreeBenefit,
+        tier: plan.tier,
+        hoursBookedToday,
+      },
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // BOOKING CREATION ACTION
 // ---------------------------------------------------------------------------
 
@@ -111,15 +253,20 @@ export async function updateCourtAction(
  */
 export async function createCourtBookingAction(
   input: CourtBookingCreateInput
-): Promise<ActionResult<{ bookingId: string }>> {
+): Promise<ActionResult<{ bookingId: string; finalPrice: number }>> {
   try {
     const validated = courtBookingCreateSchema.parse(input);
     const user = await requireAuth();
 
-    // Members can book for themselves, staff can book for any member
+    // Members can book for themselves, staff can book for any member or walk-in guest
     const isStaff = ['OWNER', 'ADMIN', 'FRONT_DESK'].includes(user.role);
     if (!isStaff && user.role !== 'MEMBER') {
       throw new AppError('You do not have permission to book courts.', 'FORBIDDEN', 403);
+    }
+
+    // Maintenance bookings are staff-only
+    if (validated.bookingType === 'MAINTENANCE' && !isStaff) {
+      throw new AppError('Only staff can schedule court maintenance.', 'FORBIDDEN', 403);
     }
 
     const supabase = await createClient();
@@ -135,12 +282,16 @@ export async function createCourtBookingAction(
       throw new AppError('Court not found', 'NOT_FOUND', 404);
     }
 
-    if (!court.is_active) {
-      throw new AppError('This court is currently closed for maintenance or inactive', 'COURT_INACTIVE', 400);
+    if (!court.is_active && validated.bookingType !== 'MAINTENANCE') {
+      throw new AppError(
+        'This court is currently closed for maintenance or inactive.',
+        'COURT_INACTIVE',
+        400
+      );
     }
 
     // 2. Resolve member and plan for pricing
-    const memberId = validated.memberId || user.memberId || null;
+    const memberId = validated.memberId || (isStaff ? null : user.memberId) || null;
     let planData: { tier: string; courtDiscountPercent: number; freeCourtHoursPerDay: number } | null = null;
     let hoursBookedToday = 0;
 
@@ -160,7 +311,11 @@ export async function createCourtBookingAction(
         .single();
 
       if (member && member.status === 'ACTIVE' && member.membership_plans) {
-        const plan = member.membership_plans as { tier: string; court_discount_percent: number; free_court_hours_per_day: number };
+        const plan = member.membership_plans as {
+          tier: string;
+          court_discount_percent: number;
+          free_court_hours_per_day: number;
+        };
         planData = {
           tier: plan.tier,
           courtDiscountPercent: Number(plan.court_discount_percent),
@@ -193,15 +348,35 @@ export async function createCourtBookingAction(
     }
 
     // 3. Compute price server-side
-    const pricing = calculateCourtPrice({
-      hourlyRate: Number(court.hourly_rate),
-      plan: planData ? {
-        tier: planData.tier as 'GOLD' | 'SILVER' | 'JUNIOR',
-        courtDiscountPercent: planData.courtDiscountPercent,
-        freeCourtHoursPerDay: planData.freeCourtHoursPerDay,
-      } : null,
-      hoursBookedToday,
-    });
+    let basePrice = Number(court.hourly_rate);
+    let discountAmount = 0;
+    let finalPrice = basePrice;
+
+    if (validated.bookingType === 'MAINTENANCE') {
+      basePrice = 0;
+      discountAmount = 0;
+      finalPrice = 0;
+    } else {
+      const pricing = calculateCourtPrice({
+        hourlyRate: basePrice,
+        plan: planData ? {
+          tier: planData.tier as 'GOLD' | 'SILVER' | 'JUNIOR',
+          courtDiscountPercent: planData.courtDiscountPercent,
+          freeCourtHoursPerDay: planData.freeCourtHoursPerDay,
+        } : null,
+        hoursBookedToday,
+      });
+      basePrice = pricing.basePrice;
+      discountAmount = pricing.discountAmount;
+      finalPrice = pricing.finalPrice;
+    }
+
+    // Compose notes with guest info if walk-in
+    let finalNotes = validated.notes || '';
+    if (!memberId && validated.guestName) {
+      const guestDetails = `Walk-in Guest: ${validated.guestName}${validated.guestPhone ? ` (Tel: ${validated.guestPhone})` : ''}`;
+      finalNotes = finalNotes ? `${guestDetails} | ${finalNotes}` : guestDetails;
+    }
 
     // 4. Call atomic database stored procedure
     const { data: bookingId, error: rpcError } = await supabase.rpc('create_court_booking', {
@@ -210,14 +385,14 @@ export async function createCourtBookingAction(
       p_booking_type: validated.bookingType,
       p_start_time: validated.startTime,
       p_end_time: validated.endTime,
-      p_base_price: pricing.basePrice,
-      p_discount_amount: pricing.discountAmount,
-      p_final_price: pricing.finalPrice,
-      p_notes: validated.notes || null,
+      p_base_price: basePrice,
+      p_discount_amount: discountAmount,
+      p_final_price: finalPrice,
+      p_notes: finalNotes || null,
     });
 
     if (rpcError) {
-      if (rpcError.code === '23P01') {
+      if (rpcError.code === '23P01' || rpcError.message?.toLowerCase().includes('exclusion')) {
         throw new BookingConcurrencyError();
       }
       if (rpcError.message?.includes('MEMBER_DAILY_LIMIT_EXCEEDED')) {
@@ -235,8 +410,180 @@ export async function createCourtBookingAction(
 
     return {
       success: true,
-      data: { bookingId: bookingId as string },
+      data: {
+        bookingId: bookingId as string,
+        finalPrice,
+      },
       message: 'Court booked successfully!',
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// BOOKING RESCHEDULING ACTION (Phase 2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Server action to safely reschedule an existing court booking.
+ * Enforces conflict revalidation, daily booking limits, and server-side repricing.
+ */
+export async function rescheduleBookingAction(
+  input: BookingRescheduleInput
+): Promise<ActionResult<{ bookingId: string; newFinalPrice: number }>> {
+  try {
+    const validated = bookingRescheduleSchema.parse(input);
+    const user = await requireAuth();
+    const supabase = await createClient();
+
+    // 1. Fetch existing booking
+    const { data: booking, error: bookingError } = await supabase
+      .from('court_bookings')
+      .select(`
+        id,
+        court_id,
+        member_id,
+        booking_type,
+        start_time,
+        end_time,
+        status,
+        members (profile_id)
+      `)
+      .eq('id', validated.bookingId)
+      .single();
+
+    if (bookingError || !booking) {
+      throw new AppError('Booking not found', 'NOT_FOUND', 404);
+    }
+
+    if (booking.status === 'CANCELLED') {
+      throw new AppError('Cancelled bookings cannot be rescheduled.', 'CANNOT_RESCHEDULE_CANCELLED', 400);
+    }
+
+    if (booking.status === 'COMPLETED') {
+      throw new AppError('Completed bookings cannot be rescheduled.', 'CANNOT_RESCHEDULE_COMPLETED', 400);
+    }
+
+    // Authorization: Owner of the booking or Staff
+    const isOwner = booking.members?.profile_id === user.id;
+    const isStaff = ['OWNER', 'ADMIN', 'FRONT_DESK'].includes(user.role);
+
+    if (!isOwner && !isStaff) {
+      throw new AppError('Unauthorized to reschedule this booking.', 'FORBIDDEN', 403);
+    }
+
+    // 2. Fetch target court details
+    const { data: targetCourt, error: courtError } = await supabase
+      .from('courts')
+      .select('id, name, hourly_rate, is_active')
+      .eq('id', validated.newCourtId)
+      .single();
+
+    if (courtError || !targetCourt) {
+      throw new AppError('Target court not found', 'NOT_FOUND', 404);
+    }
+
+    if (!targetCourt.is_active && booking.booking_type !== 'MAINTENANCE') {
+      throw new AppError('The target court is currently inactive or closed for maintenance.', 'COURT_INACTIVE', 400);
+    }
+
+    // 3. Recalculate price for the new court and date
+    let basePrice = Number(targetCourt.hourly_rate);
+    let discountAmount = 0;
+    let finalPrice = basePrice;
+
+    if (booking.booking_type === 'MAINTENANCE') {
+      basePrice = 0;
+      discountAmount = 0;
+      finalPrice = 0;
+    } else if (booking.member_id) {
+      const { data: member } = await supabase
+        .from('members')
+        .select(`
+          id,
+          status,
+          membership_plans (
+            tier,
+            court_discount_percent,
+            free_court_hours_per_day
+          )
+        `)
+        .eq('id', booking.member_id)
+        .single();
+
+      if (member && member.status === 'ACTIVE' && member.membership_plans) {
+        const plan = member.membership_plans as {
+          tier: string;
+          court_discount_percent: number;
+          free_court_hours_per_day: number;
+        };
+
+        // Count other bookings on the target date (excluding this one)
+        const targetDate = new Date(validated.newStartTime).toISOString().split('T')[0];
+        const { count } = await supabase
+          .from('court_bookings')
+          .select('id', { count: 'exact', head: true })
+          .eq('member_id', booking.member_id)
+          .neq('id', booking.id)
+          .gte('start_time', `${targetDate}T00:00:00Z`)
+          .lt('start_time', `${targetDate}T23:59:59.999Z`)
+          .neq('status', 'CANCELLED');
+
+        const hoursBookedToday = count || 0;
+
+        const pricing = calculateCourtPrice({
+          hourlyRate: basePrice,
+          plan: {
+            tier: plan.tier as 'GOLD' | 'SILVER' | 'JUNIOR',
+            courtDiscountPercent: Number(plan.court_discount_percent),
+            freeCourtHoursPerDay: plan.free_court_hours_per_day,
+          },
+          hoursBookedToday,
+        });
+
+        basePrice = pricing.basePrice;
+        discountAmount = pricing.discountAmount;
+        finalPrice = pricing.finalPrice;
+      }
+    }
+
+    // 4. Call atomic stored procedure
+    const { data: rescheduledId, error: rpcError } = await supabase.rpc('reschedule_court_booking', {
+      p_booking_id: validated.bookingId,
+      p_new_court_id: targetCourt.id,
+      p_new_start_time: validated.newStartTime,
+      p_new_end_time: validated.newEndTime,
+      p_new_base_price: basePrice,
+      p_new_discount_amount: discountAmount,
+      p_new_final_price: finalPrice,
+      p_notes: validated.notes || null,
+    });
+
+    if (rpcError) {
+      if (rpcError.code === '23P01' || rpcError.message?.toLowerCase().includes('exclusion')) {
+        throw new BookingConcurrencyError();
+      }
+      if (rpcError.message?.includes('MEMBER_DAILY_LIMIT_EXCEEDED')) {
+        throw new AppError(
+          'Daily booking limit reached: Members can play at most twice per day on the selected date.',
+          'DAILY_LIMIT_EXCEEDED',
+          400
+        );
+      }
+      throw rpcError;
+    }
+
+    revalidatePath('/dashboard/bookings');
+    revalidatePath('/dashboard/courts');
+
+    return {
+      success: true,
+      data: {
+        bookingId: rescheduledId as string,
+        newFinalPrice: finalPrice,
+      },
+      message: 'Booking rescheduled successfully!',
     };
   } catch (err) {
     return handleActionError(err);
@@ -248,7 +595,8 @@ export async function createCourtBookingAction(
 // ---------------------------------------------------------------------------
 
 /**
- * Server action to cancel an existing booking
+ * Server action to cancel an existing booking.
+ * Preserves historical records, enforces RBAC, and frees the member daily limit quota.
  */
 export async function cancelBookingAction(
   input: BookingCancellationInput
@@ -284,7 +632,7 @@ export async function cancelBookingAction(
       throw new AppError('Unauthorized to cancel this booking', 'FORBIDDEN', 403);
     }
 
-    // Update booking status to CANCELLED (preserves history)
+    // Update booking status to CANCELLED (preserves history for audit)
     const { error: updateError } = await supabase
       .from('court_bookings')
       .update({
@@ -304,7 +652,7 @@ export async function cancelBookingAction(
     return {
       success: true,
       data: { bookingId: validated.bookingId },
-      message: 'Booking cancelled successfully.',
+      message: 'Booking cancelled successfully. Daily booking quota has been restored.',
     };
   } catch (err) {
     return handleActionError(err);
@@ -312,7 +660,43 @@ export async function cancelBookingAction(
 }
 
 // ---------------------------------------------------------------------------
-// SOCIAL PLAY PARTICIPANT ACTION
+// BOOKING STATUS UPDATE (Operations: Completed / No-Show)
+// ---------------------------------------------------------------------------
+
+export async function updateBookingStatusAction(
+  bookingId: string,
+  newStatus: 'COMPLETED' | 'NO_SHOW'
+): Promise<ActionResult<{ bookingId: string }>> {
+  try {
+    const user = await requireAuth();
+    const isStaff = ['OWNER', 'ADMIN', 'FRONT_DESK'].includes(user.role);
+    if (!isStaff) {
+      throw new AppError('Unauthorized to update booking status.', 'FORBIDDEN', 403);
+    }
+
+    const supabase = await createClient();
+
+    const { error } = await supabase
+      .from('court_bookings')
+      .update({ status: newStatus })
+      .eq('id', bookingId);
+
+    if (error) throw error;
+
+    revalidatePath('/dashboard/bookings');
+
+    return {
+      success: true,
+      data: { bookingId },
+      message: `Booking marked as ${newStatus.replace('_', ' ')}.`,
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SOCIAL PLAY PARTICIPANT ACTIONS (Phase 2)
 // ---------------------------------------------------------------------------
 
 /**
@@ -326,7 +710,7 @@ export async function addSocialPlayParticipantAction(
     const user = await requireAuth();
     const supabase = await createClient();
 
-    // Verify the booking exists and is a SOCIAL_PLAY type
+    // Verify booking
     const { data: booking, error: fetchError } = await supabase
       .from('court_bookings')
       .select('id, booking_type, status, start_time')
@@ -345,16 +729,20 @@ export async function addSocialPlayParticipantAction(
       throw new AppError('Cannot add participants to a cancelled booking.', 'BOOKING_CANCELLED', 400);
     }
 
-    // Verify it's a Friday
+    // Verify Friday restriction
     const bookingDay = new Date(booking.start_time).getUTCDay();
     if (bookingDay !== 5) {
-      throw new AppError('Social play is only available on Fridays.', 'NOT_FRIDAY', 400);
+      throw new AppError('Social play is strictly permitted on Fridays only.', 'NOT_FRIDAY', 400);
     }
 
-    // Staff can add participants; members are limited
-    const isStaff = ['OWNER', 'ADMIN', 'FRONT_DESK'].includes(user.role);
-    if (!isStaff && user.role !== 'MEMBER') {
-      throw new AppError('Unauthorized to add participants.', 'FORBIDDEN', 403);
+    // Capacity limit check: max 12 participants per social session
+    const { count } = await supabase
+      .from('booking_participants')
+      .select('id', { count: 'exact', head: true })
+      .eq('booking_id', validated.bookingId);
+
+    if (count !== null && count >= 12) {
+      throw new AppError('This social play session has reached its maximum capacity of 12 players.', 'CAPACITY_REACHED', 400);
     }
 
     // Check duplicate participant
@@ -395,6 +783,121 @@ export async function addSocialPlayParticipantAction(
   }
 }
 
+/**
+ * Remove a participant from a SOCIAL_PLAY booking
+ */
+export async function removeSocialPlayParticipantAction(
+  input: RemoveParticipantInput
+): Promise<ActionResult<{ success: boolean }>> {
+  try {
+    const validated = removeParticipantSchema.parse(input);
+    const user = await requireAuth();
+    const supabase = await createClient();
+
+    const isStaff = ['OWNER', 'ADMIN', 'FRONT_DESK'].includes(user.role);
+
+    // If not staff, verify participant belongs to member
+    if (!isStaff) {
+      const { data: participant } = await supabase
+        .from('booking_participants')
+        .select('member_id, members(profile_id)')
+        .eq('id', validated.participantId)
+        .single();
+
+      if (!participant || (participant.members as { profile_id: string } | null)?.profile_id !== user.id) {
+        throw new AppError('Unauthorized to remove this participant.', 'FORBIDDEN', 403);
+      }
+    }
+
+    const { error } = await supabase
+      .from('booking_participants')
+      .delete()
+      .eq('id', validated.participantId);
+
+    if (error) throw error;
+
+    revalidatePath('/dashboard/bookings');
+
+    return {
+      success: true,
+      data: { success: true },
+      message: 'Participant removed successfully.',
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PAYMENT & FINANCE INTEGRATION (Developer 4 Contract)
+// ---------------------------------------------------------------------------
+
+/**
+ * Record a payment for a completed/confirmed court booking.
+ * Integrates directly with public.payments schema without creating a separate payment system.
+ */
+export async function recordBookingPaymentAction(
+  input: BookingPaymentInput
+): Promise<ActionResult<{ paymentId: string; paymentNumber: string }>> {
+  try {
+    const validated = bookingPaymentSchema.parse(input);
+    const user = await requireAuth();
+    const isStaff = ['OWNER', 'ADMIN', 'FRONT_DESK'].includes(user.role);
+    if (!isStaff) {
+      throw new AppError('Only front-desk and administration staff can record booking payments.', 'FORBIDDEN', 403);
+    }
+
+    const supabase = await createClient();
+
+    // Verify booking
+    const { data: booking, error: fetchError } = await supabase
+      .from('court_bookings')
+      .select('id, member_id, final_price, status')
+      .eq('id', validated.bookingId)
+      .single();
+
+    if (fetchError || !booking) {
+      throw new AppError('Booking not found', 'NOT_FOUND', 404);
+    }
+
+    // Generate unique payment number
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const paymentNumber = `PAY-BKG-${timestamp}-${randomSuffix}`;
+
+    const { data: payment, error: paymentError } = await supabase
+      .from('payments')
+      .insert({
+        payment_number: paymentNumber,
+        booking_id: booking.id,
+        member_id: booking.member_id || null,
+        amount: validated.amount,
+        payment_method: validated.paymentMethod,
+        status: 'COMPLETED',
+        transaction_reference: validated.transactionReference || null,
+        recorded_by: user.id,
+      })
+      .select('id')
+      .single();
+
+    if (paymentError) throw paymentError;
+
+    revalidatePath('/dashboard/bookings');
+    revalidatePath('/dashboard/payments');
+
+    return {
+      success: true,
+      data: {
+        paymentId: payment.id,
+        paymentNumber,
+      },
+      message: `Payment of ₹${validated.amount} recorded successfully under ${paymentNumber}.`,
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // AVAILABILITY QUERY ACTIONS
 // ---------------------------------------------------------------------------
@@ -402,10 +905,11 @@ export async function addSocialPlayParticipantAction(
 export interface TimeSlot {
   startTime: string;
   endTime: string;
-  status: 'available' | 'booked' | 'past' | 'social_play';
+  status: 'available' | 'booked' | 'past' | 'social_play' | 'maintenance';
   bookingId?: string;
   bookedBy?: string;
   bookingType?: string;
+  isMine?: boolean;
 }
 
 export interface CourtAvailability {
@@ -414,6 +918,7 @@ export interface CourtAvailability {
   sportType: string;
   hourlyRate: number;
   isIndoor: boolean;
+  isActive: boolean;
   date: string;
   slots: TimeSlot[];
 }
@@ -454,6 +959,7 @@ export async function getCourtAvailabilityAction(
         status,
         booking_type,
         members(
+          profile_id,
           membership_number,
           profiles(full_name)
         )
@@ -475,6 +981,16 @@ export async function getCourtAvailabilityAction(
         const slotStart = new Date(`${date}T${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}:00Z`);
         const slotEnd = new Date(slotStart.getTime() + 60 * 60 * 1000);
 
+        // If court is inactive, mark all slots as maintenance
+        if (!court.is_active) {
+          slots.push({
+            startTime: slotStart.toISOString(),
+            endTime: slotEnd.toISOString(),
+            status: 'maintenance',
+          });
+          continue;
+        }
+
         // Check if past
         if (slotStart.getTime() < now.getTime()) {
           slots.push({
@@ -493,14 +1009,24 @@ export async function getCourtAvailabilityAction(
         });
 
         if (overlapping) {
-          const memberName = overlapping.members?.profiles?.full_name || 'Walk-in Guest';
+          const memberName = (overlapping.members as { profiles?: { full_name: string } | null } | null)?.profiles?.full_name || 'Walk-in Guest';
+          const isMine = (overlapping.members as { profile_id?: string } | null)?.profile_id === user.id;
+
+          let statusType: TimeSlot['status'] = 'booked';
+          if (overlapping.booking_type === 'SOCIAL_PLAY') {
+            statusType = 'social_play';
+          } else if (overlapping.booking_type === 'MAINTENANCE') {
+            statusType = 'maintenance';
+          }
+
           slots.push({
             startTime: slotStart.toISOString(),
             endTime: slotEnd.toISOString(),
-            status: overlapping.booking_type === 'SOCIAL_PLAY' ? 'social_play' : 'booked',
+            status: statusType,
             bookingId: overlapping.id,
             bookedBy: memberName,
             bookingType: overlapping.booking_type,
+            isMine,
           });
         } else {
           slots.push({
@@ -520,6 +1046,7 @@ export async function getCourtAvailabilityAction(
         sportType: court.sport_type,
         hourlyRate: Number(court.hourly_rate),
         isIndoor: court.is_indoor,
+        isActive: court.is_active,
         date,
         slots,
       },
@@ -541,7 +1068,7 @@ export async function getCourtsAction(): Promise<ActionResult<Array<{
   isActive: boolean;
 }>>> {
   try {
-    const user = await requireAuth();
+    await requireAuth();
     const supabase = await createClient();
 
     const { data: courts, error } = await supabase
@@ -577,8 +1104,10 @@ export async function getBookingsAction(filters?: {
   memberId?: string;
 }): Promise<ActionResult<Array<{
   id: string;
+  courtId: string;
   courtName: string;
   sportType: string;
+  memberId: string | null;
   memberName: string | null;
   membershipNumber: string | null;
   bookingType: string;
@@ -592,6 +1121,7 @@ export async function getBookingsAction(filters?: {
   cancelledAt: string | null;
   notes: string | null;
   createdAt: string;
+  isMine: boolean;
 }>>> {
   try {
     const user = await requireAuth();
@@ -601,6 +1131,8 @@ export async function getBookingsAction(filters?: {
       .from('court_bookings')
       .select(`
         id,
+        court_id,
+        member_id,
         booking_type,
         start_time,
         end_time,
@@ -613,7 +1145,7 @@ export async function getBookingsAction(filters?: {
         notes,
         created_at,
         courts (name, sport_type),
-        members (membership_number, profiles (full_name))
+        members (profile_id, membership_number, profiles (full_name))
       `)
       .order('start_time', { ascending: false });
 
@@ -638,24 +1170,30 @@ export async function getBookingsAction(filters?: {
 
     return {
       success: true,
-      data: (bookings || []).map((b) => ({
-        id: b.id,
-        courtName: b.courts?.name || 'Unknown Court',
-        sportType: b.courts?.sport_type || 'TENNIS',
-        memberName: b.members?.profiles?.full_name || null,
-        membershipNumber: b.members?.membership_number || null,
-        bookingType: b.booking_type,
-        startTime: b.start_time,
-        endTime: b.end_time,
-        status: b.status,
-        basePrice: Number(b.base_price),
-        discountAmount: Number(b.discount_amount),
-        finalPrice: Number(b.final_price),
-        cancellationReason: b.cancellation_reason,
-        cancelledAt: b.cancelled_at,
-        notes: b.notes,
-        createdAt: b.created_at,
-      })),
+      data: (bookings || []).map((b) => {
+        const memberProfileId = (b.members as { profile_id?: string } | null)?.profile_id;
+        return {
+          id: b.id,
+          courtId: b.court_id,
+          courtName: b.courts?.name || 'Unknown Court',
+          sportType: b.courts?.sport_type || 'TENNIS',
+          memberId: b.member_id,
+          memberName: (b.members as { profiles?: { full_name: string } | null } | null)?.profiles?.full_name || null,
+          membershipNumber: (b.members as { membership_number?: string } | null)?.membership_number || null,
+          bookingType: b.booking_type,
+          startTime: b.start_time,
+          endTime: b.end_time,
+          status: b.status,
+          basePrice: Number(b.base_price),
+          discountAmount: Number(b.discount_amount),
+          finalPrice: Number(b.final_price),
+          cancellationReason: b.cancellation_reason,
+          cancelledAt: b.cancelled_at,
+          notes: b.notes,
+          createdAt: b.created_at,
+          isMine: memberProfileId === user.id,
+        };
+      }),
     };
   } catch (err) {
     return handleActionError(err);
@@ -673,7 +1211,7 @@ export async function getMembersForBookingAction(): Promise<ActionResult<Array<{
   status: string;
 }>>> {
   try {
-    const user = await requireAuth();
+    await requireAuth();
     const supabase = await createClient();
 
     const { data: members, error } = await supabase
@@ -713,9 +1251,12 @@ export async function getBookingDetailsAction(
 ): Promise<ActionResult<{
   booking: {
     id: string;
+    courtId: string;
     courtName: string;
     sportType: string;
+    memberId: string | null;
     memberName: string | null;
+    membershipNumber: string | null;
     bookingType: string;
     startTime: string;
     endTime: string;
@@ -725,9 +1266,11 @@ export async function getBookingDetailsAction(
     finalPrice: number;
     cancellationReason: string | null;
     notes: string | null;
+    isMine: boolean;
   };
   participants: Array<{
     id: string;
+    memberId: string | null;
     memberName: string | null;
     guestName: string | null;
   }>;
@@ -740,6 +1283,8 @@ export async function getBookingDetailsAction(
       .from('court_bookings')
       .select(`
         id,
+        court_id,
+        member_id,
         booking_type,
         start_time,
         end_time,
@@ -750,7 +1295,7 @@ export async function getBookingDetailsAction(
         cancellation_reason,
         notes,
         courts (name, sport_type),
-        members (membership_number, profiles (full_name))
+        members (profile_id, membership_number, profiles (full_name))
       `)
       .eq('id', bookingId)
       .single();
@@ -763,19 +1308,25 @@ export async function getBookingDetailsAction(
       .from('booking_participants')
       .select(`
         id,
+        member_id,
         guest_name,
         members (profiles (full_name))
       `)
       .eq('booking_id', bookingId);
+
+    const isMine = (booking.members as { profile_id?: string } | null)?.profile_id === user.id;
 
     return {
       success: true,
       data: {
         booking: {
           id: booking.id,
+          courtId: booking.court_id,
           courtName: booking.courts?.name || 'Unknown',
           sportType: booking.courts?.sport_type || 'TENNIS',
-          memberName: booking.members?.profiles?.full_name || null,
+          memberId: booking.member_id,
+          memberName: (booking.members as { profiles?: { full_name: string } | null } | null)?.profiles?.full_name || null,
+          membershipNumber: (booking.members as { membership_number?: string } | null)?.membership_number || null,
           bookingType: booking.booking_type,
           startTime: booking.start_time,
           endTime: booking.end_time,
@@ -785,12 +1336,83 @@ export async function getBookingDetailsAction(
           finalPrice: Number(booking.final_price),
           cancellationReason: booking.cancellation_reason,
           notes: booking.notes,
+          isMine,
         },
         participants: (participants || []).map((p) => ({
           id: p.id,
+          memberId: p.member_id,
           memberName: (p.members as { profiles: { full_name: string } | null } | null)?.profiles?.full_name || null,
           guestName: p.guest_name,
         })),
+      },
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+/**
+ * Front-desk today's schedule summary & operations action (Phase 2)
+ */
+export async function getTodayScheduleAction(): Promise<ActionResult<{
+  totalBookingsToday: number;
+  confirmedCount: number;
+  completedCount: number;
+  cancelledCount: number;
+  activeCourtsCount: number;
+  totalRevenueToday: number;
+  capacityUtilizationPercent: number;
+}>> {
+  try {
+    await requireAuth();
+    const supabase = await createClient();
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const dayStart = `${todayStr}T00:00:00Z`;
+    const dayEnd = `${todayStr}T23:59:59.999Z`;
+
+    // Fetch today's bookings
+    const { data: bookings, error: bookingsError } = await supabase
+      .from('court_bookings')
+      .select('id, status, final_price')
+      .gte('start_time', dayStart)
+      .lte('start_time', dayEnd);
+
+    if (bookingsError) throw bookingsError;
+
+    // Fetch active courts
+    const { count: courtsCount, error: courtsError } = await supabase
+      .from('courts')
+      .select('id', { count: 'exact', head: true })
+      .eq('is_active', true);
+
+    if (courtsError) throw courtsError;
+
+    const allBookings = bookings || [];
+    const confirmedCount = allBookings.filter((b) => b.status === 'CONFIRMED').length;
+    const completedCount = allBookings.filter((b) => b.status === 'COMPLETED').length;
+    const cancelledCount = allBookings.filter((b) => b.status === 'CANCELLED').length;
+    const totalRevenueToday = allBookings
+      .filter((b) => b.status !== 'CANCELLED')
+      .reduce((sum, b) => sum + Number(b.final_price || 0), 0);
+
+    // Each active court has 16 operating hours (6 AM to 10 PM) = 16 sessions/day
+    const totalAvailableSlots = (courtsCount || 5) * 16;
+    const occupiedSlots = confirmedCount + completedCount;
+    const capacityUtilizationPercent = totalAvailableSlots > 0
+      ? Math.min(100, Math.round((occupiedSlots / totalAvailableSlots) * 100))
+      : 0;
+
+    return {
+      success: true,
+      data: {
+        totalBookingsToday: allBookings.length,
+        confirmedCount,
+        completedCount,
+        cancelledCount,
+        activeCourtsCount: courtsCount || 0,
+        totalRevenueToday,
+        capacityUtilizationPercent,
       },
     };
   } catch (err) {

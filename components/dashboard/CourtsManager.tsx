@@ -15,6 +15,8 @@ import {
   AlertTriangle,
   Activity,
   MapPin,
+  Wrench,
+  CheckCircle,
 } from 'lucide-react';
 
 interface CourtData {
@@ -70,15 +72,17 @@ export function CourtsManager({ initialCourts, canManage }: CourtsManagerProps) 
         setNewName('');
         setNewRate('');
         setNewIndoor(false);
-        // Optimistically add to list
-        setCourts([...courts, {
-          id: result.data.courtId,
-          name: newName,
-          sport_type: newSport,
-          hourly_rate: Number(newRate),
-          is_indoor: newIndoor,
-          is_active: true,
-        }]);
+        setCourts([
+          ...courts,
+          {
+            id: result.data.courtId,
+            name: newName,
+            sport_type: newSport,
+            hourly_rate: Number(newRate),
+            is_indoor: newIndoor,
+            is_active: true,
+          },
+        ]);
       } else {
         setError(result.error);
       }
@@ -91,6 +95,29 @@ export function CourtsManager({ initialCourts, canManage }: CourtsManagerProps) 
     setEditRate(String(court.hourly_rate));
     setEditIndoor(court.is_indoor);
     setEditActive(court.is_active);
+  };
+
+  const handleQuickToggleStatus = (court: CourtData) => {
+    setError(null);
+    setSuccess(null);
+
+    const newActiveState = !court.is_active;
+
+    startTransition(async () => {
+      const result = await updateCourtAction({
+        id: court.id,
+        isActive: newActiveState,
+      });
+
+      if (result.success) {
+        setSuccess(`Court "${court.name}" set to ${newActiveState ? 'Operational' : 'Maintenance'}.`);
+        setCourts(
+          courts.map((c) => (c.id === court.id ? { ...c, is_active: newActiveState } : c))
+        );
+      } else {
+        setError(result.error);
+      }
+    });
   };
 
   const handleUpdate = () => {
@@ -110,12 +137,19 @@ export function CourtsManager({ initialCourts, canManage }: CourtsManagerProps) 
       if (result.success) {
         setSuccess('Court updated successfully.');
         setEditingId(null);
-        // Update local state
-        setCourts(courts.map(c =>
-          c.id === editingId
-            ? { ...c, name: editName, hourly_rate: Number(editRate), is_indoor: editIndoor, is_active: editActive }
-            : c
-        ));
+        setCourts(
+          courts.map((c) =>
+            c.id === editingId
+              ? {
+                  ...c,
+                  name: editName,
+                  hourly_rate: Number(editRate),
+                  is_indoor: editIndoor,
+                  is_active: editActive,
+                }
+              : c
+          )
+        );
       } else {
         setError(result.error);
       }
@@ -215,7 +249,7 @@ export function CourtsManager({ initialCourts, canManage }: CourtsManagerProps) 
             key={court.id}
             className={cn(
               'border-zinc-800 bg-zinc-900/50 transition-all',
-              !court.is_active && 'opacity-60'
+              !court.is_active && 'border-purple-900/40 bg-purple-950/10'
             )}
           >
             {editingId === court.id ? (
@@ -236,7 +270,7 @@ export function CourtsManager({ initialCourts, canManage }: CourtsManagerProps) 
                   </label>
                   <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
                     <input type="checkbox" checked={editActive} onChange={(e) => setEditActive(e.target.checked)} className="rounded" />
-                    Active
+                    Operational (Active)
                   </label>
                 </div>
                 <div className="flex gap-2">
@@ -263,7 +297,8 @@ export function CourtsManager({ initialCourts, canManage }: CourtsManagerProps) 
                       {canManage && (
                         <button
                           onClick={() => handleStartEdit(court)}
-                          className="text-zinc-400 hover:text-zinc-200 transition-colors"
+                          className="text-zinc-400 hover:text-zinc-200 transition-colors p-1"
+                          title="Edit Details"
                         >
                           <Edit3 className="h-3.5 w-3.5" />
                         </button>
@@ -272,7 +307,7 @@ export function CourtsManager({ initialCourts, canManage }: CourtsManagerProps) 
                   </div>
                   <CardTitle className="text-base text-white mt-2">{court.name}</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2 text-xs text-zinc-400 border-t border-zinc-800/80 pt-3">
+                <CardContent className="space-y-3 text-xs text-zinc-400 border-t border-zinc-800/80 pt-3">
                   <div className="flex justify-between">
                     <span className="flex items-center gap-1">
                       <Activity className="h-3 w-3" />
@@ -287,6 +322,36 @@ export function CourtsManager({ initialCourts, canManage }: CourtsManagerProps) 
                     </span>
                     <span className="text-zinc-300">{court.is_indoor ? 'Indoor Arena' : 'Outdoor Court'}</span>
                   </div>
+
+                  {canManage && (
+                    <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between">
+                      <span className="text-[11px] text-zinc-500">Quick Status</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleQuickToggleStatus(court)}
+                        isLoading={isPending}
+                        className={cn(
+                          'h-6 text-[10px] px-2',
+                          court.is_active
+                            ? 'text-purple-400 hover:text-purple-300 hover:bg-purple-950/30'
+                            : 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/30'
+                        )}
+                      >
+                        {court.is_active ? (
+                          <>
+                            <Wrench className="h-3 w-3 mr-1" />
+                            Set Maintenance
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            Set Operational
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </>
             )}
