@@ -34,12 +34,16 @@ export default function TrialBookingPage() {
         message: message || undefined,
       });
 
-      if (!result.success) throw new Error(result.error || 'Failed to submit');
+      if (!result.success) {
+        setError(result.error || 'Unable to submit enquiry at this moment. Please call reception directly.');
+        return;
+      }
 
       setIsSubmitted(true);
     } catch (err: unknown) {
-      console.error(err);
-      setError('Unable to submit enquiry at this moment. Please call reception directly.');
+      console.error('Enquiry submission error:', err);
+      const msg = err instanceof Error ? err.message : 'Unable to submit enquiry at this moment. Please call reception directly.';
+      setError(msg);
     } finally {
       setIsSubmitting(false);
     }

@@ -42,10 +42,12 @@ export async function submitPublicEnquiryAction(
     }
 
     const supabase = await createClient();
+    const enquiryId = crypto.randomUUID();
 
-    const { data: enquiry, error } = await supabase
+    const { error } = await supabase
       .from('enquiries')
       .insert({
+        id: enquiryId,
         full_name: validated.fullName,
         email: validated.email,
         phone: validated.phone,
@@ -54,15 +56,15 @@ export async function submitPublicEnquiryAction(
         requested_trial_date: validated.requestedTrialDate || null,
         message: validated.message || null,
         status: 'NEW',
-      })
-      .select('id')
-      .single();
+      });
 
     if (error) throw error;
 
+    revalidatePath('/dashboard/enquiries');
+
     return {
       success: true,
-      data: { enquiryId: enquiry.id },
+      data: { enquiryId },
       message: 'Your enquiry has been submitted. A club advisor will contact you shortly.',
     };
   } catch (err) {

@@ -5,7 +5,7 @@ export const publicEnquirySchema = z
   .object({
     fullName: z.string().trim().min(2, 'Full name must be at least 2 characters').max(100, 'Full name cannot exceed 100 characters'),
     email: z.string().trim().email('Valid email required').max(255, 'Email cannot exceed 255 characters'),
-    phone: z.string().trim().max(20, 'Phone cannot exceed 20 characters').regex(/^[0-9+ -]{7,20}$/, 'Valid phone number required'),
+    phone: z.string().trim().max(25, 'Phone cannot exceed 25 characters').regex(/^[0-9+() -]{7,25}$/, 'Valid phone number required'),
     interestedSport: z.enum(SPORT_TYPES as [string, ...string[]]).optional().nullable(),
     interestedPlanId: z.string().uuid('Invalid plan ID').optional().nullable(),
     requestedTrialDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Trial date must be YYYY-MM-DD').optional().nullable(),
