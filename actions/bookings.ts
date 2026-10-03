@@ -512,6 +512,14 @@ export async function rescheduleBookingAction(
         .eq('id', booking.member_id)
         .single();
 
+      if (member && member.status !== 'ACTIVE') {
+        throw new AppError(
+          'Membership is not active. Suspended or expired members cannot reschedule court bookings.',
+          'MEMBERSHIP_INACTIVE',
+          400
+        );
+      }
+
       if (member && member.status === 'ACTIVE' && member.membership_plans) {
         const plan = member.membership_plans as {
           tier: string;
@@ -548,6 +556,9 @@ export async function rescheduleBookingAction(
       }
     }
 
+    // Historical audit note for safe rescheduling tracking
+    const auditNote = `[Rescheduled by ${user.role} on ${new Date().toISOString()}] Original: ${booking.start_time} - ${booking.end_time}.${validated.notes ? ` Reason/Notes: ${validated.notes}` : ''}`;
+
     // 4. Call atomic stored procedure
     const { data: rescheduledId, error: rpcError } = await supabase.rpc('reschedule_court_booking', {
       p_booking_id: validated.bookingId,
@@ -557,7 +568,7 @@ export async function rescheduleBookingAction(
       p_new_base_price: basePrice,
       p_new_discount_amount: discountAmount,
       p_new_final_price: finalPrice,
-      p_notes: validated.notes || null,
+      p_notes: auditNote,
     });
 
     if (rpcError) {
@@ -570,6 +581,19 @@ export async function rescheduleBookingAction(
           'DAILY_LIMIT_EXCEEDED',
           400
         );
+      }
+      if (rpcError.message?.includes('OUT_OF_OPERATING_HOURS')) {
+        throw new AppError(
+          'Courts are open from 06:00 to 22:00. Sessions cannot start before 06:00 or after 21:30.',
+          'OUT_OF_OPERATING_HOURS',
+          400
+        );
+      }
+      if (rpcError.message?.includes('PAST_BOOKING_PROHIBITED')) {
+        throw new AppError('Cannot reschedule a court to a past date or time.', 'PAST_BOOKING_PROHIBITED', 400);
+      }
+      if (rpcError.message?.includes('SOCIAL_PLAY_FRIDAY_ONLY')) {
+        throw new AppError('Friday Social Play sessions are strictly permitted on Fridays only.', 'SOCIAL_PLAY_FRIDAY_ONLY', 400);
       }
       throw rpcError;
     }
@@ -632,18 +656,20 @@ export async function cancelBookingAction(
       throw new AppError('Unauthorized to cancel this booking', 'FORBIDDEN', 403);
     }
 
-    // Update booking status to CANCELLED (preserves history for audit)
-    const { error: updateError } = await supabase
-      .from('court_bookings')
-      .update({
-        status: 'CANCELLED',
-        cancellation_reason: validated.cancellationReason,
-        cancelled_at: new Date().toISOString(),
-      })
-      .eq('id', validated.bookingId);
+    // Call atomic stored procedure: cancel_court_booking
+    const { error: cancelError } = await supabase.rpc('cancel_court_booking', {
+      p_booking_id: validated.bookingId,
+      p_reason: validated.cancellationReason,
+    });
 
-    if (updateError) {
-      throw updateError;
+    if (cancelError) {
+      if (cancelError.message?.includes('ALREADY_CANCELLED')) {
+        throw new AppError('This booking is already cancelled.', 'ALREADY_CANCELLED', 400);
+      }
+      if (cancelError.message?.includes('CANNOT_CANCEL_COMPLETED')) {
+        throw new AppError('Completed bookings cannot be cancelled.', 'COMPLETED_BOOKING', 400);
+      }
+      throw cancelError;
     }
 
     revalidatePath('/dashboard/bookings');
@@ -711,71 +737,36 @@ export async function addSocialPlayParticipantAction(
     const supabase = await createClient();
 
     // Verify booking
-    const { data: booking, error: fetchError } = await supabase
-      .from('court_bookings')
-      .select('id, booking_type, status, start_time')
-      .eq('id', validated.bookingId)
-      .single();
+    const { data: participantId, error: rpcError } = await supabase.rpc('add_booking_participant', {
+      p_booking_id: validated.bookingId,
+      p_member_id: validated.memberId || null,
+      p_guest_name: validated.guestName || null,
+    });
 
-    if (fetchError || !booking) {
-      throw new AppError('Booking not found', 'NOT_FOUND', 404);
-    }
-
-    if (booking.booking_type !== 'SOCIAL_PLAY') {
-      throw new AppError('Participants can only be added to Social Play bookings.', 'INVALID_BOOKING_TYPE', 400);
-    }
-
-    if (booking.status === 'CANCELLED') {
-      throw new AppError('Cannot add participants to a cancelled booking.', 'BOOKING_CANCELLED', 400);
-    }
-
-    // Verify Friday restriction
-    const bookingDay = new Date(booking.start_time).getUTCDay();
-    if (bookingDay !== 5) {
-      throw new AppError('Social play is strictly permitted on Fridays only.', 'NOT_FRIDAY', 400);
-    }
-
-    // Capacity limit check: max 12 participants per social session
-    const { count } = await supabase
-      .from('booking_participants')
-      .select('id', { count: 'exact', head: true })
-      .eq('booking_id', validated.bookingId);
-
-    if (count !== null && count >= 12) {
-      throw new AppError('This social play session has reached its maximum capacity of 12 players.', 'CAPACITY_REACHED', 400);
-    }
-
-    // Check duplicate participant
-    if (validated.memberId) {
-      const { data: existing } = await supabase
-        .from('booking_participants')
-        .select('id')
-        .eq('booking_id', validated.bookingId)
-        .eq('member_id', validated.memberId)
-        .maybeSingle();
-
-      if (existing) {
+    if (rpcError) {
+      if (rpcError.message?.includes('INVALID_BOOKING_TYPE')) {
+        throw new AppError('Participants can only be added to Friday Social Play sessions.', 'INVALID_BOOKING_TYPE', 400);
+      }
+      if (rpcError.message?.includes('CAPACITY_REACHED')) {
+        throw new AppError('This social play session has reached its maximum capacity of 12 players.', 'CAPACITY_REACHED', 400);
+      }
+      if (rpcError.message?.includes('DUPLICATE_PARTICIPANT')) {
         throw new AppError('This member is already registered for this session.', 'DUPLICATE_PARTICIPANT', 409);
       }
+      if (rpcError.message?.includes('BOOKING_CANCELLED')) {
+        throw new AppError('Cannot add participants to a cancelled booking.', 'BOOKING_CANCELLED', 400);
+      }
+      if (rpcError.message?.includes('BOOKING_NOT_FOUND')) {
+        throw new AppError('Booking not found', 'NOT_FOUND', 404);
+      }
+      throw rpcError;
     }
-
-    const { data, error } = await supabase
-      .from('booking_participants')
-      .insert({
-        booking_id: validated.bookingId,
-        member_id: validated.memberId || null,
-        guest_name: validated.guestName || null,
-      })
-      .select('id')
-      .single();
-
-    if (error) throw error;
 
     revalidatePath('/dashboard/bookings');
 
     return {
       success: true,
-      data: { participantId: data.id },
+      data: { participantId: participantId as string },
       message: 'Participant added successfully.',
     };
   } catch (err) {
@@ -946,31 +937,31 @@ export async function getCourtAvailabilityAction(
       throw new AppError('Court not found', 'NOT_FOUND', 404);
     }
 
-    // Fetch existing bookings for this court on this date
-    const dayStart = `${date}T00:00:00Z`;
-    const dayEnd = `${date}T23:59:59.999Z`;
-
-    const { data: bookings, error: bookingsError } = await supabase
-      .from('court_bookings')
-      .select(`
-        id,
-        start_time,
-        end_time,
-        status,
-        booking_type,
-        members(
-          profile_id,
-          membership_number,
-          profiles(full_name)
-        )
-      `)
-      .eq('court_id', courtId)
-      .gte('start_time', dayStart)
-      .lte('start_time', dayEnd)
-      .neq('status', 'CANCELLED')
-      .order('start_time', { ascending: true });
+    // Fetch existing bookings for this court on this date via SECURITY DEFINER function
+    // This eliminates phantom available slots caused by RLS restrictions on normal members
+    const isStaff = ['OWNER', 'ADMIN', 'FRONT_DESK'].includes(user.role);
+    const { data: bookings, error: bookingsError } = await supabase.rpc('get_court_bookings_for_date', {
+      p_court_id: courtId,
+      p_date: date,
+    });
 
     if (bookingsError) throw bookingsError;
+
+    // Track user's own bookings for accurate isMine determination
+    let userBookingIds = new Set<string>();
+    if (user.role === 'MEMBER' && user.memberId) {
+      const { data: myBookings } = await supabase
+        .from('court_bookings')
+        .select('id')
+        .eq('member_id', user.memberId)
+        .gte('start_time', `${date}T00:00:00Z`)
+        .lte('start_time', `${date}T23:59:59.999Z`)
+        .neq('status', 'CANCELLED');
+
+      if (myBookings) {
+        userBookingIds = new Set(myBookings.map((b) => b.id));
+      }
+    }
 
     // Generate time slots from 6:00 AM to 10:00 PM with 30-min intervals
     const slots: TimeSlot[] = [];
@@ -1009,8 +1000,10 @@ export async function getCourtAvailabilityAction(
         });
 
         if (overlapping) {
-          const memberName = (overlapping.members as { profiles?: { full_name: string } | null } | null)?.profiles?.full_name || 'Walk-in Guest';
-          const isMine = (overlapping.members as { profile_id?: string } | null)?.profile_id === user.id;
+          const isMine = isStaff || userBookingIds.has(overlapping.booking_id);
+          const memberName = isStaff
+            ? (overlapping.member_name || 'Reserved')
+            : (isMine ? (overlapping.member_name || 'My Booking') : 'Reserved');
 
           let statusType: TimeSlot['status'] = 'booked';
           if (overlapping.booking_type === 'SOCIAL_PLAY') {
@@ -1023,7 +1016,7 @@ export async function getCourtAvailabilityAction(
             startTime: slotStart.toISOString(),
             endTime: slotEnd.toISOString(),
             status: statusType,
-            bookingId: overlapping.id,
+            bookingId: overlapping.booking_id,
             bookedBy: memberName,
             bookingType: overlapping.booking_type,
             isMine,

@@ -87,6 +87,14 @@ test('Reject invalid sport type', () => {
   assert(!result.success, 'Should reject invalid sport type');
 });
 
+test('Valid court update', () => {
+  const result = courtUpdateSchema.safeParse({
+    id: '22222222-2222-2222-2222-222222222201',
+    hourlyRate: 750,
+  });
+  assert(result.success, 'Should accept valid court update');
+});
+
 // ---------------------------------------------------------------------------
 console.log('\n📋 2. BOOKING CREATE SCHEMA TESTS');
 // ---------------------------------------------------------------------------
@@ -94,7 +102,7 @@ console.log('\n📋 2. BOOKING CREATE SCHEMA TESTS');
 test('Valid standard booking', () => {
   const now = new Date();
   now.setDate(now.getDate() + 1);
-  now.setHours(10, 0, 0, 0);
+  now.setUTCHours(10, 0, 0, 0);
   const end = new Date(now.getTime() + 60 * 60 * 1000);
 
   const result = courtBookingCreateSchema.safeParse({
@@ -109,7 +117,7 @@ test('Valid standard booking', () => {
 test('Reject booking with non-60min duration', () => {
   const now = new Date();
   now.setDate(now.getDate() + 1);
-  now.setHours(10, 0, 0, 0);
+  now.setUTCHours(10, 0, 0, 0);
   const end = new Date(now.getTime() + 90 * 60 * 1000);
 
   const result = courtBookingCreateSchema.safeParse({
@@ -151,7 +159,7 @@ test('Accept booking starting at :30', () => {
 test('Reject past booking', () => {
   const past = new Date();
   past.setDate(past.getDate() - 1);
-  past.setHours(10, 0, 0, 0);
+  past.setUTCHours(10, 0, 0, 0);
   const end = new Date(past.getTime() + 60 * 60 * 1000);
 
   const result = courtBookingCreateSchema.safeParse({
@@ -165,7 +173,7 @@ test('Reject past booking', () => {
 test('Reject invalid court UUID', () => {
   const now = new Date();
   now.setDate(now.getDate() + 1);
-  now.setHours(10, 0, 0, 0);
+  now.setUTCHours(10, 0, 0, 0);
   const end = new Date(now.getTime() + 60 * 60 * 1000);
 
   const result = courtBookingCreateSchema.safeParse({

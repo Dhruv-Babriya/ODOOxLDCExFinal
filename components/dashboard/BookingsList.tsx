@@ -18,13 +18,10 @@ import {
 } from '@/actions/bookings';
 import {
   CalendarDays,
-  Search,
   Filter,
   XCircle,
   Eye,
   Users,
-  Clock,
-  Loader2,
   AlertTriangle,
   CheckCircle2,
   X,
@@ -81,8 +78,9 @@ export function BookingsList({ initialBookings, courts, userRole }: BookingsList
   const [cancelReason, setCancelReason] = useState('');
 
   // Details & Participant Modal State
+  const [nowMs] = useState(() => Date.now());
   const [detailBooking, setDetailBooking] = useState<{
-    booking: any;
+    booking: BookingItem;
     participants: Array<{ id: string; memberId: string | null; memberName: string | null; guestName: string | null }>;
   } | null>(null);
   const [addParticipantGuestName, setAddParticipantGuestName] = useState('');
@@ -404,7 +402,7 @@ export function BookingsList({ initialBookings, courts, userRole }: BookingsList
                 ) : (
                   bookings.map((booking) => {
                     const canManageBooking = isStaff || booking.isMine;
-                    const isUpcoming = new Date(booking.startTime).getTime() > Date.now();
+                    const isUpcoming = new Date(booking.startTime).getTime() > nowMs;
                     const isConfirmed = booking.status === 'CONFIRMED';
 
                     return (
@@ -736,7 +734,7 @@ export function BookingsList({ initialBookings, courts, userRole }: BookingsList
                 <label className="block text-xs font-medium text-zinc-400 mb-1">Payment Method</label>
                 <select
                   value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value as any)}
+                  onChange={(e) => setPaymentMethod(e.target.value as 'CASH' | 'UPI' | 'CARD' | 'BANK_TRANSFER')}
                   className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-200 outline-none"
                 >
                   <option value="UPI">UPI / QR Code</option>

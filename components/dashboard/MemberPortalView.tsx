@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type { MemberPortalData } from '@/types/shared';
-import { formatDate, formatCurrency } from '@/lib/utils';
+import { formatDate, formatCurrency, formatTime } from '@/lib/utils';
 import {
   Sparkles,
   Calendar,
@@ -422,6 +422,7 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
                         <th className="py-2.5 px-3">Type</th>
                         <th className="py-2.5 px-3">Status</th>
                         <th className="py-2.5 px-3 text-right">Fee</th>
+                        <th className="py-2.5 px-3 text-right">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800/60 font-sans">
@@ -434,7 +435,11 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
                             </span>
                           </td>
                           <td className="py-3 px-3 text-zinc-300">
-                            <div>{formatDate(b.start_time)}</div>
+                            <div className="font-medium text-white">{formatDate(b.start_time)}</div>
+                            <div className="text-[11px] text-emerald-400 font-mono flex items-center gap-1 mt-0.5">
+                              <Clock className="h-3 w-3 inline" />
+                              <span>{formatTime(b.start_time)} – {formatTime(b.end_time)}</span>
+                            </div>
                           </td>
                           <td className="py-3 px-3">
                             <Badge variant="outline" className="text-[10px]">
@@ -448,6 +453,13 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
                           </td>
                           <td className="py-3 px-3 text-right font-mono font-semibold text-emerald-400">
                             {formatCurrency(b.total_price)}
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <Link href="/dashboard/bookings">
+                              <Button variant="ghost" size="sm" className="text-xs h-7 text-emerald-400 hover:text-emerald-300">
+                                Manage / Reschedule
+                              </Button>
+                            </Link>
                           </td>
                         </tr>
                       ))}

@@ -302,6 +302,7 @@ export type Database = {
           discount_amount: number
           end_time: string
           final_price: number
+          total_price?: number
           id: string
           member_id: string | null
           notes: string | null
@@ -1504,6 +1505,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_court_bookings_for_date: {
+        Args: {
+          p_court_id: string
+          p_date: string
+        }
+        Returns: {
+          booking_id: string
+          start_time: string
+          end_time: string
+          status: Database["public"]["Enums"]["app_booking_status"]
+          booking_type: Database["public"]["Enums"]["app_booking_type"]
+          member_name: string
+        }[]
+      }
       create_court_booking: {
         Args: {
           p_base_price: number

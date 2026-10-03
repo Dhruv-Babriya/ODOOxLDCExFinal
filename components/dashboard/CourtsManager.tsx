@@ -10,7 +10,6 @@ import { createCourtAction, updateCourtAction } from '@/actions/bookings';
 import {
   Plus,
   Edit3,
-  Loader2,
   CheckCircle2,
   AlertTriangle,
   Activity,

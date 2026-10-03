@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:bookings": "node scripts/test-phase2-bookings.mjs"
+    "test:phase2": "node scripts/test-phase2-bookings.mjs",
+    "test:phase3": "node scripts/test-phase3-hardening.mjs",
+    "test:bookings": "node scripts/test-phase2-bookings.mjs && node scripts/test-phase3-hardening.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

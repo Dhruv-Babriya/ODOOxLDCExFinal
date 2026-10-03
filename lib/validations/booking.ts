@@ -61,6 +61,16 @@ export const courtBookingCreateSchema = z.object({
     });
   }
 
+  // Operating hours: 06:00 to 22:00 UTC (first slot 06:00, last session ends by 22:30, start <= 21:30)
+  const startHour = start.getUTCHours();
+  if (startHour < 6 || startHour > 21) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Courts are open from 06:00 to 22:00. Sessions cannot start before 06:00 or after 21:30',
+      path: ['startTime'],
+    });
+  }
+
   // Prevent booking in the past
   if (start.getTime() < Date.now() - 5 * 60 * 1000) {
     ctx.addIssue({
@@ -116,6 +126,16 @@ export const bookingRescheduleSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: 'Rescheduled slot must start on the hour (:00) or half-hour (:30)',
+      path: ['newStartTime'],
+    });
+  }
+
+  // Operating hours: 06:00 to 22:00 UTC (first slot 06:00, last session ends by 22:30, start <= 21:30)
+  const startHour = start.getUTCHours();
+  if (startHour < 6 || startHour > 21) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Courts are open from 06:00 to 22:00. Sessions cannot start before 06:00 or after 21:30',
       path: ['newStartTime'],
     });
   }

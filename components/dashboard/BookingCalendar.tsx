@@ -858,9 +858,10 @@ export function BookingCalendar({ courts, userRole, userMemberId }: BookingCalen
                       size="sm"
                       onClick={handleRescheduleConfirm}
                       isLoading={isPending}
+                      disabled={isPending}
                       className="flex-1 bg-amber-600 hover:bg-amber-500 text-white"
                     >
-                      Confirm Reschedule
+                      {isPending ? 'Rescheduling...' : 'Confirm Reschedule'}
                     </Button>
                   ) : (
                     <Button
@@ -868,6 +869,7 @@ export function BookingCalendar({ courts, userRole, userMemberId }: BookingCalen
                       size="sm"
                       onClick={handleBookSlot}
                       isLoading={isPending}
+                      disabled={isPending || loadingPreview || (isStaff && isWalkIn && guestName.trim().length < 2)}
                       className="flex-1"
                     >
                       {isPending ? 'Confirming...' : 'Confirm Reservation'}
