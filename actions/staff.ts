@@ -10,10 +10,11 @@ import {
   type LeaveRequestInput,
 } from '@/lib/validations/staff';
 import { handleActionError } from '@/lib/errors';
-import { requirePermission, requireAuth } from '@/lib/auth/session';
+import { requirePermission, requireAuth, requireRole } from '@/lib/auth/session';
 import type { ActionResult } from '@/types/shared';
 import type { Database } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
+import type { StaffMember, StaffShift, StaffLeave } from '@/components/dashboard/staff/StaffDashboardClient';
 
 // ---------------------------------------------------------------------------
 // Staff CRUD
@@ -26,7 +27,7 @@ export async function createStaffAction(
   input: StaffCreateInput
 ): Promise<ActionResult<{ staffId: string }>> {
   try {
-    const user = await requirePermission('staff:manage');
+    await requirePermission('staff:manage');
     const validated = staffCreateSchema.parse(input);
     const supabase = await createClient();
 
@@ -246,7 +247,13 @@ export async function cancelLeaveRequestAction(
 // Staff Operational Queries & Approvals
 // ---------------------------------------------------------------------------
 
-export async function getStaffDashboardDataAction() {
+export interface StaffDashboardData {
+  staff: StaffMember[];
+  shifts: StaffShift[];
+  leaves: StaffLeave[];
+}
+
+export async function getStaffDashboardDataAction(): Promise<ActionResult<StaffDashboardData>> {
   try {
     await requireAuth();
     const supabase = await createClient();
@@ -284,7 +291,14 @@ export async function getStaffDashboardDataAction() {
       .order('created_at', { ascending: false });
     if (leavesError) throw leavesError;
 
-    return { success: true, data: { staff, shifts, leaves } };
+    return {
+      success: true,
+      data: {
+        staff: (staff || []) as unknown as StaffMember[],
+        shifts: (shifts || []) as unknown as StaffShift[],
+        leaves: (leaves || []) as unknown as StaffLeave[],
+      },
+    };
   } catch (error) {
     return handleActionError(error);
   }
@@ -292,12 +306,12 @@ export async function getStaffDashboardDataAction() {
 
 export async function updateLeaveStatusAction(leaveId: string, status: 'APPROVED' | 'REJECTED') {
   try {
-    const session = await requirePermission('ADMIN', 'OWNER');
+    const user = await requireRole(['ADMIN', 'OWNER']);
     const supabase = await createClient();
 
     const { error } = await supabase
       .from('leave_requests')
-      .update({ status, reviewed_by: session.user.id, reviewed_at: new Date().toISOString() })
+      .update({ status, reviewed_by: user.id, reviewed_at: new Date().toISOString() })
       .eq('id', leaveId);
       
     if (error) throw error;

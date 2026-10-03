@@ -10,7 +10,7 @@ import {
   PieChart, Pie, Cell, Legend
 } from 'recharts';
 import type { OwnerDashboardMetrics } from '@/actions/reports';
-import { DollarSign, TrendingUp, Activity, ShoppingBag, Coffee, AlertCircle, Clock, Users, Users2 } from 'lucide-react';
+import { DollarSign, Activity, ShoppingBag, Coffee, AlertCircle, Clock, Users, Users2, BarChart3 } from 'lucide-react';
 
 interface ReportsDashboardClientProps {
   metrics: OwnerDashboardMetrics;
@@ -130,7 +130,7 @@ export function ReportsDashboardClient({ metrics }: ReportsDashboardClientProps)
                     ))}
                   </Pie>
                   <Tooltip 
-                    formatter={(value: number) => formatCurrency(value)}
+                    formatter={(value: unknown) => formatCurrency(Number(value || 0))}
                     contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', color: '#fff' }}
                   />
                   <Legend verticalAlign="bottom" height={36}/>
@@ -156,7 +156,7 @@ export function ReportsDashboardClient({ metrics }: ReportsDashboardClientProps)
                   <XAxis type="number" stroke="#a1a1aa" tickFormatter={(value) => `₹${value}`} />
                   <YAxis type="category" dataKey="name" stroke="#a1a1aa" hide />
                   <Tooltip 
-                    formatter={(value: number) => formatCurrency(value)}
+                    formatter={(value: unknown) => formatCurrency(Number(value || 0))}
                     contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', color: '#fff' }}
                   />
                   <Legend />

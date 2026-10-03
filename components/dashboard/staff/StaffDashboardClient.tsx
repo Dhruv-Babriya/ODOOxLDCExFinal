@@ -6,12 +6,55 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { updateLeaveStatusAction } from '@/actions/staff';
 import { Users, CalendarClock, CalendarX2, Check, X, Building2 } from 'lucide-react';
-import { formatDate, formatDateTime } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
+
+export interface StaffProfile {
+  full_name: string | null;
+  email?: string | null;
+  role?: string | null;
+}
+
+export interface StaffMember {
+  id: string;
+  employee_code: string;
+  department: string;
+  position: string;
+  is_active: boolean;
+  profile?: StaffProfile | null;
+}
+
+export interface StaffShift {
+  id: string;
+  shift_date: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+  notes?: string | null;
+  staff?: {
+    id: string;
+    employee_code: string;
+    profile?: { full_name: string | null } | null;
+  } | null;
+}
+
+export interface StaffLeave {
+  id: string;
+  leave_type: string;
+  start_date: string;
+  end_date: string;
+  reason?: string | null;
+  status: string;
+  staff?: {
+    id: string;
+    employee_code: string;
+    profile?: { full_name: string | null } | null;
+  } | null;
+}
 
 interface StaffDashboardClientProps {
-  staff: any[];
-  shifts: any[];
-  leaves: any[];
+  staff: StaffMember[];
+  shifts: StaffShift[];
+  leaves: StaffLeave[];
 }
 
 export function StaffDashboardClient({ staff, shifts, leaves }: StaffDashboardClientProps) {
@@ -154,7 +197,7 @@ export function StaffDashboardClient({ staff, shifts, leaves }: StaffDashboardCl
                             <Check className="w-3 h-3 mr-1" /> Approve
                           </Button>
                           <Button 
-                            variant="destructive" 
+                            variant="danger" 
                             size="sm" 
                             className="h-7 text-[11px]"
                             disabled={isProcessing === leave.id}

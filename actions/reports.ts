@@ -4,7 +4,6 @@ import { createClient } from '@/lib/supabase/server';
 import { handleActionError } from '@/lib/errors';
 import { requireAuth } from '@/lib/auth/session';
 import type { ActionResult } from '@/types/shared';
-import { startOfDay, startOfWeek, startOfMonth, endOfDay, endOfWeek, endOfMonth, parseISO } from 'date-fns';
 
 export interface RevenueData {
   memberships: number;
@@ -31,19 +30,20 @@ export async function getOwnerDashboardMetricsAction(): Promise<ActionResult<Own
     const supabase = await createClient();
 
     const now = new Date();
-    const todayStart = startOfDay(now).toISOString();
-    const todayEnd = endOfDay(now).toISOString();
     
-    // Use ISO string comparisons for date ranges
-    const weekStart = startOfWeek(now, { weekStartsOn: 1 }).toISOString();
-    const weekEnd = endOfWeek(now, { weekStartsOn: 1 }).toISOString();
+    // Native Date calculations without external date-fns dependency
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).toISOString();
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
     
-    const monthStart = startOfMonth(now).toISOString();
-    const monthEnd = endOfMonth(now).toISOString();
+    // Monday as start of week
+    const dayOfWeek = (now.getDay() + 6) % 7;
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek, 0, 0, 0, 0).toISOString();
+    const weekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + 6, 23, 59, 59, 999).toISOString();
+    
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0).toISOString();
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).toISOString();
 
     // 1. Fetch completed payments strictly to avoid duplicates/unpaid/failed
-    // We categorize based on which foreign key is present.
-    // If multiple are present, we prioritize (though business logic should enforce mutually exclusive FKs)
     const { data: payments, error: paymentsError } = await supabase
       .from('payments')
       .select('amount, created_at, invoice_id, booking_id, shop_order_id, bar_order_id')
@@ -63,8 +63,8 @@ export async function getOwnerDashboardMetricsAction(): Promise<ActionResult<Own
           if (p.shop_order_id) rev.shop += amount;
           else if (p.bar_order_id) rev.bar += amount;
           else if (p.booking_id) rev.courts += amount;
-          else if (p.invoice_id) rev.memberships += amount; // We assume invoices without other FKs are memberships/custom
-          else rev.memberships += amount; // Fallback
+          else if (p.invoice_id) rev.memberships += amount;
+          else rev.memberships += amount;
           rev.total += amount;
         }
       }
@@ -90,17 +90,30 @@ export async function getOwnerDashboardMetricsAction(): Promise<ActionResult<Own
       .in('status', ['NEW', 'CONTACTED']);
     if (enqError) throw enqError;
 
-    // 4. Low Stock Items
-    const { count: lowStockCount, error: stockError } = await supabase
-      .rpc('get_low_stock_count'); // Fallback to raw query if RPC doesn't exist
+    // 4. Low Stock Items (Direct typed query)
+    const [{ data: products }, { data: inventory }] = await Promise.all([
+      supabase.from('products').select('id, low_stock_threshold'),
+      supabase.from('inventory').select('product_id, quantity_on_hand'),
+    ]);
+
+    let finalLowStockCount = 0;
+    if (products && inventory) {
+      for (const p of products) {
+        const inv = inventory.find(i => i.product_id === p.id);
+        if (inv && inv.quantity_on_hand <= (p.low_stock_threshold || 5)) {
+          finalLowStockCount++;
+        }
+      }
+    }
       
-    // 5. Open Tabs Balance
-    const { data: openTabs, error: tabsError } = await supabase
-      .from('customer_tabs')
-      .select('current_balance')
-      .eq('status', 'OPEN');
-    if (tabsError) throw tabsError;
-    const openTabsBalance = openTabs?.reduce((acc, tab) => acc + Number(tab.current_balance || 0), 0) || 0;
+    // 5. Open Tabs Balance (Calculate by summing active unsettled orders on open customer tabs)
+    const { data: openTabOrders } = await supabase
+      .from('bar_orders')
+      .select('total_amount')
+      .not('tab_id', 'is', null)
+      .not('order_status', 'in', '("COMPLETED","CANCELLED")');
+
+    const openTabsBalance = (openTabOrders || []).reduce((acc, o) => acc + Number(o.total_amount || 0), 0);
 
     // 6. Active Members
     const { count: activeMembersCount, error: membersError } = await supabase
@@ -108,23 +121,6 @@ export async function getOwnerDashboardMetricsAction(): Promise<ActionResult<Own
       .select('id', { count: 'exact', head: true })
       .eq('status', 'ACTIVE');
     if (membersError) throw membersError;
-
-    // For low stock if RPC fails:
-    let finalLowStockCount = lowStockCount || 0;
-    if (stockError) {
-      const { data: products } = await supabase.from('products').select('id, low_stock_threshold');
-      const { data: inventory } = await supabase.from('inventory').select('product_id, quantity_on_hand');
-      if (products && inventory) {
-        let count = 0;
-        for (const p of products) {
-          const inv = inventory.find(i => i.product_id === p.id);
-          if (inv && inv.quantity_on_hand <= (p.low_stock_threshold || 5)) {
-            count++;
-          }
-        }
-        finalLowStockCount = count;
-      }
-    }
 
     return {
       success: true,
@@ -143,3 +139,4 @@ export async function getOwnerDashboardMetricsAction(): Promise<ActionResult<Own
     return handleActionError(error);
   }
 }
+
