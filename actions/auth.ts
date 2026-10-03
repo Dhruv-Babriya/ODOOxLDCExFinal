@@ -80,6 +80,37 @@ export async function signUpAction(input: RegisterInput): Promise<ActionResult<{
     });
 
     if (error) {
+      // If email rate limit is exceeded on Supabase's built-in SMTP (e.g. during frequent testing),
+      // seamlessly fallback to direct member registration so the user is never blocked.
+      const isRateLimit =
+        error.message?.toLowerCase().includes('rate limit') ||
+        error.status === 429 ||
+        (error as unknown as Record<string, unknown>)?.code === 'over_email_send_rate_limit';
+
+      if (isRateLimit) {
+        // Cast RPC function name until types are regenerated
+        const { data: directUserId, error: directError } = await (supabase.rpc as any)('register_member_direct', {
+          p_email: validated.email,
+          p_password: validated.password,
+          p_full_name: validated.fullName,
+          p_phone: validated.phone || null,
+        });
+
+        if (directError) {
+          return {
+            success: false,
+            error: directError.message,
+            code: 'REGISTRATION_FAILED',
+          };
+        }
+
+        return {
+          success: true,
+          data: { userId: directUserId as string },
+          message: 'Registration successful. You can now log in.',
+        };
+      }
+
       return {
         success: false,
         error: error.message,
