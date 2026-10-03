@@ -21,7 +21,7 @@ export default async function ExecutiveReportsDashboardPage() {
         ]}
       >
         <div className="p-6 bg-rose-950/20 border border-rose-900 text-rose-400 rounded-lg">
-          Failed to load dashboard metrics: {result.error || 'Unknown error'}
+          Failed to load dashboard metrics: {!result.success ? result.error : 'Unknown error'}
         </div>
       </DashboardModuleShell>
     );

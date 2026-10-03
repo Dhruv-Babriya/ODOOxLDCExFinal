@@ -18,7 +18,6 @@ import {
   bookingCancellationSchema,
   addParticipantSchema,
   courtCreateSchema,
-  courtUpdateSchema,
 } from '../lib/validations/booking';
 
 import { calculateCourtPrice } from '../lib/pricing';
@@ -94,11 +93,11 @@ console.log('\n📋 2. BOOKING CREATE SCHEMA TESTS');
 test('Valid standard booking', () => {
   const now = new Date();
   now.setDate(now.getDate() + 1);
-  now.setHours(10, 0, 0, 0);
+  now.setUTCHours(10, 0, 0, 0);
   const end = new Date(now.getTime() + 60 * 60 * 1000);
 
   const result = courtBookingCreateSchema.safeParse({
-    courtId: '22222222-2222-2222-2222-222222222201',
+    courtId: '22222222-2222-4222-8222-222222222201',
     bookingType: 'STANDARD',
     startTime: now.toISOString(),
     endTime: end.toISOString(),
@@ -109,11 +108,11 @@ test('Valid standard booking', () => {
 test('Reject booking with non-60min duration', () => {
   const now = new Date();
   now.setDate(now.getDate() + 1);
-  now.setHours(10, 0, 0, 0);
+  now.setUTCHours(10, 0, 0, 0);
   const end = new Date(now.getTime() + 90 * 60 * 1000);
 
   const result = courtBookingCreateSchema.safeParse({
-    courtId: '22222222-2222-2222-2222-222222222201',
+    courtId: '22222222-2222-4222-8222-222222222201',
     startTime: now.toISOString(),
     endTime: end.toISOString(),
   });
@@ -127,7 +126,7 @@ test('Reject booking starting at :15', () => {
   const end = new Date(now.getTime() + 60 * 60 * 1000);
 
   const result = courtBookingCreateSchema.safeParse({
-    courtId: '22222222-2222-2222-2222-222222222201',
+    courtId: '22222222-2222-4222-8222-222222222201',
     startTime: now.toISOString(),
     endTime: end.toISOString(),
   });
@@ -141,7 +140,7 @@ test('Accept booking starting at :30', () => {
   const end = new Date(now.getTime() + 60 * 60 * 1000);
 
   const result = courtBookingCreateSchema.safeParse({
-    courtId: '22222222-2222-2222-2222-222222222201',
+    courtId: '22222222-2222-4222-8222-222222222201',
     startTime: now.toISOString(),
     endTime: end.toISOString(),
   });
@@ -151,11 +150,11 @@ test('Accept booking starting at :30', () => {
 test('Reject past booking', () => {
   const past = new Date();
   past.setDate(past.getDate() - 1);
-  past.setHours(10, 0, 0, 0);
+  past.setUTCHours(10, 0, 0, 0);
   const end = new Date(past.getTime() + 60 * 60 * 1000);
 
   const result = courtBookingCreateSchema.safeParse({
-    courtId: '22222222-2222-2222-2222-222222222201',
+    courtId: '22222222-2222-4222-8222-222222222201',
     startTime: past.toISOString(),
     endTime: end.toISOString(),
   });
@@ -165,7 +164,7 @@ test('Reject past booking', () => {
 test('Reject invalid court UUID', () => {
   const now = new Date();
   now.setDate(now.getDate() + 1);
-  now.setHours(10, 0, 0, 0);
+  now.setUTCHours(10, 0, 0, 0);
   const end = new Date(now.getTime() + 60 * 60 * 1000);
 
   const result = courtBookingCreateSchema.safeParse({
@@ -182,7 +181,7 @@ console.log('\n📋 3. CANCELLATION SCHEMA TESTS');
 
 test('Valid cancellation', () => {
   const result = bookingCancellationSchema.safeParse({
-    bookingId: '22222222-2222-2222-2222-222222222201',
+    bookingId: '22222222-2222-4222-8222-222222222201',
     cancellationReason: 'Changed plans',
   });
   assert(result.success, 'Should accept valid cancellation');
@@ -190,7 +189,7 @@ test('Valid cancellation', () => {
 
 test('Reject cancellation without reason', () => {
   const result = bookingCancellationSchema.safeParse({
-    bookingId: '22222222-2222-2222-2222-222222222201',
+    bookingId: '22222222-2222-4222-8222-222222222201',
     cancellationReason: '',
   });
   assert(!result.success, 'Should reject empty reason');
@@ -198,7 +197,7 @@ test('Reject cancellation without reason', () => {
 
 test('Reject cancellation with short reason', () => {
   const result = bookingCancellationSchema.safeParse({
-    bookingId: '22222222-2222-2222-2222-222222222201',
+    bookingId: '22222222-2222-4222-8222-222222222201',
     cancellationReason: 'no',
   });
   assert(!result.success, 'Should reject reason shorter than 3 chars');
@@ -210,15 +209,15 @@ console.log('\n📋 4. SOCIAL PLAY PARTICIPANT SCHEMA TESTS');
 
 test('Valid participant with member ID', () => {
   const result = addParticipantSchema.safeParse({
-    bookingId: '22222222-2222-2222-2222-222222222201',
-    memberId: '11111111-1111-1111-1111-111111111111',
+    bookingId: '22222222-2222-4222-8222-222222222201',
+    memberId: '11111111-1111-4111-8111-111111111111',
   });
   assert(result.success, 'Should accept member participant');
 });
 
 test('Valid participant with guest name', () => {
   const result = addParticipantSchema.safeParse({
-    bookingId: '22222222-2222-2222-2222-222222222201',
+    bookingId: '22222222-2222-4222-8222-222222222201',
     guestName: 'John Doe',
   });
   assert(result.success, 'Should accept guest participant');
@@ -226,7 +225,7 @@ test('Valid participant with guest name', () => {
 
 test('Reject participant without member or guest', () => {
   const result = addParticipantSchema.safeParse({
-    bookingId: '22222222-2222-2222-2222-222222222201',
+    bookingId: '22222222-2222-4222-8222-222222222201',
   });
   assert(!result.success, 'Should reject participant without identity');
 });

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { cn, formatCurrency, formatDateTime, formatTime } from '@/lib/utils';
+import { formatCurrency, formatTime } from '@/lib/utils';
 import {
   getBookingsAction,
   cancelBookingAction,
@@ -17,14 +17,10 @@ import {
   updateBookingStatusAction,
 } from '@/actions/bookings';
 import {
-  CalendarDays,
-  Search,
   Filter,
   XCircle,
   Eye,
   Users,
-  Clock,
-  Loader2,
   AlertTriangle,
   CheckCircle2,
   X,
@@ -56,6 +52,26 @@ interface BookingRow {
   isMine: boolean;
 }
 
+interface BookingDetailInfo {
+  id: string;
+  courtId: string;
+  courtName: string;
+  sportType: string;
+  memberId: string | null;
+  memberName: string | null;
+  membershipNumber: string | null;
+  bookingType: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  basePrice: number;
+  discountAmount: number;
+  finalPrice: number;
+  cancellationReason: string | null;
+  notes: string | null;
+  isMine: boolean;
+}
+
 interface CourtInfo {
   id: string;
   name: string;
@@ -82,7 +98,7 @@ export function BookingsList({ initialBookings, courts, userRole }: BookingsList
 
   // Details & Participant Modal State
   const [detailBooking, setDetailBooking] = useState<{
-    booking: any;
+    booking: BookingDetailInfo;
     participants: Array<{ id: string; memberId: string | null; memberName: string | null; guestName: string | null }>;
   } | null>(null);
   const [addParticipantGuestName, setAddParticipantGuestName] = useState('');
@@ -97,6 +113,7 @@ export function BookingsList({ initialBookings, courts, userRole }: BookingsList
   const [newCourtId, setNewCourtId] = useState('');
   const [newDate, setNewDate] = useState('');
   const [newTime, setNewTime] = useState('10:00');
+  const [currentTime] = useState(() => Date.now());
 
   const isStaff = ['OWNER', 'ADMIN', 'FRONT_DESK'].includes(userRole);
 
@@ -404,7 +421,7 @@ export function BookingsList({ initialBookings, courts, userRole }: BookingsList
                 ) : (
                   bookings.map((booking) => {
                     const canManageBooking = isStaff || booking.isMine;
-                    const isUpcoming = new Date(booking.startTime).getTime() > Date.now();
+                    const isUpcoming = new Date(booking.startTime).getTime() > currentTime;
                     const isConfirmed = booking.status === 'CONFIRMED';
 
                     return (
@@ -736,7 +753,7 @@ export function BookingsList({ initialBookings, courts, userRole }: BookingsList
                 <label className="block text-xs font-medium text-zinc-400 mb-1">Payment Method</label>
                 <select
                   value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value as any)}
+                  onChange={(e) => setPaymentMethod(e.target.value as 'CASH' | 'UPI' | 'CARD' | 'BANK_TRANSFER')}
                   className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-200 outline-none"
                 >
                   <option value="UPI">UPI / QR Code</option>
