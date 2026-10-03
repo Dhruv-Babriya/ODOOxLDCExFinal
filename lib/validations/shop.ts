@@ -87,6 +87,18 @@ export const shopOrderCreateSchema = z
       message: 'Delivery address is required when choosing Delivery option.',
       path: ['deliveryAddress'],
     }
+  )
+  .refine(
+    (data) => {
+      if (data.fulfillmentType === 'DELIVERY' && (!data.customerPhone || data.customerPhone.trim().length < 5)) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: 'A contact phone number is required for delivery orders.',
+      path: ['customerPhone'],
+    }
   );
 
 export type ShopOrderCreateInput = z.infer<typeof shopOrderCreateSchema>;
@@ -112,3 +124,13 @@ export const updateShopOrderFulfillmentStatusSchema = z.object({
 });
 
 export type UpdateShopOrderFulfillmentStatusInput = z.infer<typeof updateShopOrderFulfillmentStatusSchema>;
+
+export const recordCommercePaymentSchema = z.object({
+  orderId: z.string().uuid('Invalid order ID'),
+  amount: z.coerce.number().positive('Amount must be positive'),
+  paymentMethod: z.enum(['CASH', 'CARD', 'UPI', 'BANK_TRANSFER']).default('UPI'),
+  transactionReference: z.string().trim().optional().nullable(),
+});
+
+export type RecordCommercePaymentInput = z.infer<typeof recordCommercePaymentSchema>;
+

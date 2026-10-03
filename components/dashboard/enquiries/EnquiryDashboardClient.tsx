@@ -9,8 +9,19 @@ import { MessageSquare, PhoneCall, CalendarDays, FileText, CheckCircle2, XCircle
 import { formatDateTime } from '@/lib/utils';
 import { QuoteForm } from '@/components/dashboard/QuoteForm';
 
+export interface EnquiryItem {
+  id: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  status: string;
+  interested_sport?: string | null;
+  requested_trial_date?: string | null;
+  created_at: string;
+}
+
 interface EnquiryDashboardClientProps {
-  enquiries: any[];
+  enquiries: EnquiryItem[];
 }
 
 export function EnquiryDashboardClient({ enquiries }: EnquiryDashboardClientProps) {

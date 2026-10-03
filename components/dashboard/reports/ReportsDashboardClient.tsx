@@ -153,7 +153,7 @@ export function ReportsDashboardClient({ metrics }: ReportsDashboardClientProps)
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={barData} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal={false} />
-                  <XAxis type="number" stroke="#a1a1aa" tickFormatter={(value: any) => `₹${value}`} />
+                  <XAxis type="number" stroke="#a1a1aa" tickFormatter={(value: string | number) => `₹${value}`} />
                   <YAxis type="category" dataKey="name" stroke="#a1a1aa" hide />
                   <Tooltip 
                     formatter={(value: unknown) => formatCurrency(Number(value || 0))}

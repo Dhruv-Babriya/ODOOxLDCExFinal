@@ -22,7 +22,6 @@ import {
   CalendarDays,
   Clock,
   CheckCircle2,
-  XCircle,
   AlertTriangle,
   Users,
   ChevronLeft,
@@ -114,7 +113,6 @@ export function BookingCalendar({ courts, userRole, userMemberId }: BookingCalen
   const [loadingAvailability, setLoadingAvailability] = useState(false);
 
   const isStaff = ['OWNER', 'ADMIN', 'FRONT_DESK'].includes(userRole);
-  const activeCourts = courts.filter((c) => c.isActive);
 
   // Refresh availability when court or date changes
   const refreshAvailability = async (courtId: string, date: string) => {
@@ -154,7 +152,7 @@ export function BookingCalendar({ courts, userRole, userMemberId }: BookingCalen
     return () => {
       cancelled = true;
     };
-  }, [selectedCourt?.id, selectedDate]);
+  }, [selectedCourt, selectedDate]);
 
   // Load members & stats for staff
   useEffect(() => {
@@ -170,40 +168,60 @@ export function BookingCalendar({ courts, userRole, userMemberId }: BookingCalen
 
   // Calculate live pricing preview when slot or selected member changes
   useEffect(() => {
+    let cancelled = false;
+
     if (!selectedSlot || !selectedCourt || selectedSlot.status !== 'available') {
-      setPricePreview(null);
-      return;
+      Promise.resolve().then(() => {
+        if (!cancelled) setPricePreview(null);
+      });
+      return () => {
+        cancelled = true;
+      };
     }
 
     if (bookingType === 'MAINTENANCE') {
-      setPricePreview({
-        hourlyRate: 0,
-        basePrice: 0,
-        discountAmount: 0,
-        finalPrice: 0,
-        discountPercent: 0,
-        isFreeBenefit: false,
-        tier: 'MAINTENANCE',
-        hoursBookedToday: 0,
+      Promise.resolve().then(() => {
+        if (!cancelled) {
+          setPricePreview({
+            hourlyRate: 0,
+            basePrice: 0,
+            discountAmount: 0,
+            finalPrice: 0,
+            discountPercent: 0,
+            isFreeBenefit: false,
+            tier: 'MAINTENANCE',
+            hoursBookedToday: 0,
+          });
+        }
       });
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
 
     const memberIdToPreview = isStaff
       ? (isWalkIn ? null : selectedMemberId)
       : userMemberId;
 
-    setLoadingPreview(true);
+    Promise.resolve().then(() => {
+      if (!cancelled) setLoadingPreview(true);
+    });
+
     previewBookingPriceAction({
       courtId: selectedCourt.id,
       memberId: memberIdToPreview,
       startTime: selectedSlot.startTime,
     }).then((res) => {
+      if (cancelled) return;
       if (res.success) {
         setPricePreview(res.data);
       }
       setLoadingPreview(false);
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedSlot, selectedCourt, selectedMemberId, isWalkIn, isStaff, userMemberId, bookingType]);
 
   const handleDateNav = (direction: -1 | 1) => {
@@ -733,7 +751,7 @@ export function BookingCalendar({ courts, userRole, userMemberId }: BookingCalen
                     <label className="block text-xs font-medium text-zinc-300 mb-1">Session Type</label>
                     <select
                       value={bookingType}
-                      onChange={(e) => setBookingType(e.target.value as any)}
+                      onChange={(e) => setBookingType(e.target.value as 'STANDARD' | 'SOCIAL_PLAY' | 'COACHING' | 'MAINTENANCE')}
                       className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:ring-1 focus:ring-emerald-500 outline-none"
                     >
                       <option value="STANDARD">Standard Session</option>

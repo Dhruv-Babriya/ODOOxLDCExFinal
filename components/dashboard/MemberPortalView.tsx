@@ -2,11 +2,18 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import type { MemberPortalData } from '@/types/shared';
+<<<<<<< HEAD
 import { formatDate, formatCurrency, formatTime } from '@/lib/utils';
+=======
+import { formatDate, formatCurrency } from '@/lib/utils';
+import { renewMembershipAction } from '@/actions/members';
+>>>>>>> fdf6696dc65136cca6700d389d83efd15f0b24a9
 import {
   Sparkles,
   Calendar,
@@ -22,6 +29,9 @@ import {
   ArrowRight,
   User,
   Shield,
+  RefreshCw,
+  X,
+  Loader2,
 } from 'lucide-react';
 
 interface MemberPortalViewProps {
@@ -29,6 +39,7 @@ interface MemberPortalViewProps {
 }
 
 export function MemberPortalView({ data }: MemberPortalViewProps) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<
     'overview' | 'bookings' | 'commerce' | 'billing' | 'history'
   >('overview');
@@ -42,12 +53,77 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
     invoices,
     payments,
     history,
+    availablePlans = [],
   } = data;
 
   const plan = member.membership_plans;
   const isExpiringSoon = member.derived_status === 'EXPIRING_SOON';
   const isExpired = member.derived_status === 'EXPIRED';
   const tier = plan?.tier;
+
+  // Self-Service Renewal Modal State
+  const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
+  const plansList = availablePlans.length > 0 ? availablePlans : plan ? [plan] : [];
+  const [renewalPlanId, setRenewalPlanId] = useState<string>(member.current_plan_id || plansList[0]?.id || '');
+  const selectedRenewalPlan = plansList.find((p) => p.id === renewalPlanId) || plansList[0] || plan;
+
+  const getRenewalStartDate = () => {
+    const today = new Date().toISOString().split('T')[0];
+    if (member.end_date && member.end_date > today) {
+      return member.end_date;
+    }
+    return today;
+  };
+
+  const [renewalStartDate, setRenewalStartDate] = useState(getRenewalStartDate());
+  const calculateRenewalEndDate = (start: string, durationDays: number) => {
+    const d = new Date(start);
+    d.setDate(d.getDate() + durationDays);
+    return d.toISOString().split('T')[0];
+  };
+
+  const [renewalPaymentMethod, setRenewalPaymentMethod] = useState<'CARD' | 'UPI' | 'CASH'>('CARD');
+  const [renewalPaymentRef, setRenewalPaymentRef] = useState('');
+  const [renewalNotes, setRenewalNotes] = useState('');
+  const [renewalLoading, setRenewalLoading] = useState(false);
+  const [renewalError, setRenewalError] = useState<string | null>(null);
+  const [renewalSuccess, setRenewalSuccess] = useState<string | null>(null);
+
+  const handleSelfRenewal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRenewalLoading(true);
+    setRenewalError(null);
+    setRenewalSuccess(null);
+
+    const endDate = calculateRenewalEndDate(
+      renewalStartDate,
+      selectedRenewalPlan?.duration_days || 365
+    );
+
+    const res = await renewMembershipAction({
+      memberId: member.id,
+      planId: renewalPlanId,
+      startDate: renewalStartDate,
+      endDate,
+      notes: renewalNotes || 'Online self-service renewal',
+      paymentMethod: renewalPaymentMethod,
+      paymentReference: renewalPaymentRef || undefined,
+    });
+
+    setRenewalLoading(false);
+
+    if (!res.success) {
+      setRenewalError(res.error || 'Failed to complete membership renewal.');
+      return;
+    }
+
+    setRenewalSuccess(res.message || 'Membership renewed successfully!');
+    setTimeout(() => {
+      setIsRenewModalOpen(false);
+      setRenewalSuccess(null);
+      router.refresh();
+    }, 1200);
+  };
 
   return (
     <div className="space-y-6 max-w-6xl">
@@ -96,6 +172,22 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
           </div>
 
           <div className="flex flex-wrap gap-2.5 w-full md:w-auto">
+            <Button
+              variant={isExpiringSoon || isExpired ? 'primary' : 'outline'}
+              size="sm"
+              className={`gap-2 text-xs ${
+                isExpiringSoon || isExpired
+                  ? 'bg-amber-600 hover:bg-amber-500 text-white border-none shadow-md shadow-amber-950/40'
+                  : 'border-zinc-700 text-zinc-300 hover:text-white'
+              }`}
+              onClick={() => {
+                setRenewalStartDate(getRenewalStartDate());
+                setIsRenewModalOpen(true);
+              }}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              <span>Renew / Upgrade</span>
+            </Button>
             <Link href="/dashboard/bookings">
               <Button variant="primary" size="sm" className="gap-2 text-xs shadow-md shadow-emerald-950/40">
                 <Calendar className="h-3.5 w-3.5" />
@@ -126,15 +218,22 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
             <div>
               <p className="font-semibold text-sm text-white">Membership Expiring Soon ({member.days_remaining} Days Remaining)</p>
               <p className="text-amber-400/80 mt-1">
-                Your current cycle ends on {formatDate(member.end_date)}. Please renew your plan at the front desk or contact staff to retain your court discounts and daily quotas.
+                Your current cycle ends on {formatDate(member.end_date)}. Renew online now to seamlessly extend your membership without losing your remaining days or court discounts.
               </p>
             </div>
           </div>
-          <Link href="/dashboard/members">
-            <Button size="sm" variant="outline" className="text-xs border-amber-700 text-amber-300 hover:bg-amber-900/40 shrink-0">
-              Staff Renewal
-            </Button>
-          </Link>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs border-amber-700 text-amber-300 hover:bg-amber-900/40 shrink-0 gap-1.5"
+            onClick={() => {
+              setRenewalStartDate(getRenewalStartDate());
+              setIsRenewModalOpen(true);
+            }}
+          >
+            <RefreshCw className="h-3 w-3" />
+            <span>Renew Online Now</span>
+          </Button>
         </div>
       )}
 
@@ -145,15 +244,22 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
             <div>
               <p className="font-semibold text-sm text-white">Membership Term Elapsed</p>
               <p className="text-rose-400/80 mt-1">
-                Your membership expired {Math.abs(member.days_remaining)} days ago on {formatDate(member.end_date)}. Court booking discounts and daily free hours are paused until renewal.
+                Your membership expired {Math.abs(member.days_remaining)} days ago on {formatDate(member.end_date)}. Reactivate your membership online to restore court discounts and privileges.
               </p>
             </div>
           </div>
-          <Link href="/dashboard/members">
-            <Button size="sm" variant="outline" className="text-xs border-rose-700 text-rose-300 hover:bg-rose-900/40 shrink-0">
-              Renew at Desk
-            </Button>
-          </Link>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs border-rose-700 text-rose-300 hover:bg-rose-900/40 shrink-0 gap-1.5"
+            onClick={() => {
+              setRenewalStartDate(getRenewalStartDate());
+              setIsRenewModalOpen(true);
+            }}
+          >
+            <RefreshCw className="h-3 w-3" />
+            <span>Reactivate Membership</span>
+          </Button>
         </div>
       )}
 
@@ -766,6 +872,208 @@ export function MemberPortalView({ data }: MemberPortalViewProps) {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* Self-Service Renewal Modal */}
+      {isRenewModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="max-w-lg w-full bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden my-8">
+            <div className="flex items-center justify-between p-5 border-b border-zinc-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                  <RefreshCw className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Renew / Upgrade Membership</h3>
+                  <p className="text-xs text-zinc-400">Member #{member.membership_number}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsRenewModalOpen(false)}
+                className="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSelfRenewal} className="p-5 space-y-4">
+              {renewalError && (
+                <div className="p-3 rounded-lg bg-rose-950/40 border border-rose-800 text-rose-300 text-xs flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
+                  <span>{renewalError}</span>
+                </div>
+              )}
+
+              {renewalSuccess && (
+                <div className="p-3 rounded-lg bg-emerald-950/40 border border-emerald-800 text-emerald-300 text-xs flex items-center gap-2 animate-pulse">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                  <span>{renewalSuccess}</span>
+                </div>
+              )}
+
+              {/* Plan Selection */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-300">Select Membership Plan</label>
+                <select
+                  value={renewalPlanId}
+                  onChange={(e) => setRenewalPlanId(e.target.value)}
+                  className="w-full text-xs bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-emerald-500"
+                >
+                  {plansList.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.tier}) — {formatCurrency(Number(p.price))} / {p.duration_days} days
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Selected Plan Perks summary */}
+              {selectedRenewalPlan && (
+                <div className="p-3 rounded-lg bg-zinc-950/80 border border-zinc-800/80 space-y-2 text-xs">
+                  <div className="flex justify-between items-center text-zinc-300">
+                    <span className="text-zinc-400">Plan Rate:</span>
+                    <span className="font-bold text-white">{formatCurrency(Number(selectedRenewalPlan.price))}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-zinc-300">
+                    <span className="text-zinc-400">Court Booking Discount:</span>
+                    <span className="font-bold text-emerald-400">{selectedRenewalPlan.court_discount_percent}% OFF</span>
+                  </div>
+                  <div className="flex justify-between items-center text-zinc-300">
+                    <span className="text-zinc-400">Daily Free Play:</span>
+                    <span className="font-bold text-white">{selectedRenewalPlan.free_court_hours_per_day} hr / day</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Extension Dates Information */}
+              <div className="p-3 rounded-lg bg-zinc-950/80 border border-zinc-800/80 space-y-2 text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-400">New Term Start:</span>
+                  <span className="font-mono text-white font-medium">{renewalStartDate}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-400">New Term End:</span>
+                  <span className="font-mono text-emerald-400 font-medium">
+                    {calculateRenewalEndDate(renewalStartDate, selectedRenewalPlan?.duration_days || 365)}
+                  </span>
+                </div>
+                <div className="pt-1 border-t border-zinc-800/60 text-[11px] text-zinc-400">
+                  {member.end_date && member.end_date > new Date().toISOString().split('T')[0] ? (
+                    <span className="text-emerald-400">
+                      ✓ Seamless Extension: Existing active days preserved.
+                    </span>
+                  ) : (
+                    <span className="text-amber-400">
+                      ⚡ Immediate Reactivation: Starts from today.
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Payment Method Selector */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-300">Payment Method</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRenewalPaymentMethod('CARD')}
+                    className={`p-2 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                      renewalPaymentMethod === 'CARD'
+                        ? 'border-emerald-500 bg-emerald-950/40 text-emerald-300'
+                        : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700'
+                    }`}
+                  >
+                    <CreditCard className="h-3.5 w-3.5" />
+                    <span>Card</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRenewalPaymentMethod('UPI')}
+                    className={`p-2 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                      renewalPaymentMethod === 'UPI'
+                        ? 'border-emerald-500 bg-emerald-950/40 text-emerald-300'
+                        : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700'
+                    }`}
+                  >
+                    <Activity className="h-3.5 w-3.5" />
+                    <span>UPI</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRenewalPaymentMethod('CASH')}
+                    className={`p-2 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                      renewalPaymentMethod === 'CASH'
+                        ? 'border-emerald-500 bg-emerald-950/40 text-emerald-300'
+                        : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700'
+                    }`}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    <span>Front Desk</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Optional Reference */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-zinc-300">
+                  Payment Reference <span className="text-zinc-500">(Optional)</span>
+                </label>
+                <Input
+                  placeholder="e.g. Transaction ID / Card Auth"
+                  value={renewalPaymentRef}
+                  onChange={(e) => setRenewalPaymentRef(e.target.value)}
+                  className="text-xs bg-zinc-950 border-zinc-800"
+                />
+              </div>
+
+              {/* Optional Notes */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-zinc-300">
+                  Notes / Requests <span className="text-zinc-500">(Optional)</span>
+                </label>
+                <Input
+                  placeholder="e.g. Requested plan tier upgrade"
+                  value={renewalNotes}
+                  onChange={(e) => setRenewalNotes(e.target.value)}
+                  className="text-xs bg-zinc-950 border-zinc-800"
+                />
+              </div>
+
+              {/* Submit Buttons */}
+              <div className="flex gap-2 pt-2 border-t border-zinc-800">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-1/3 text-xs border-zinc-800"
+                  onClick={() => setIsRenewModalOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  className="w-2/3 text-xs font-semibold gap-1.5"
+                  disabled={renewalLoading}
+                >
+                  {renewalLoading ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <span>Processing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Pay {formatCurrency(Number(selectedRenewalPlan?.price || 0))} & Renew</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -67,8 +67,34 @@ const SIDEBAR_SECTIONS: { title: string; items: SidebarItem[] }[] = [
   },
 ];
 
-export function DashboardSidebar() {
+const MEMBER_SIDEBAR_SECTIONS: { title: string; items: SidebarItem[] }[] = [
+  {
+    title: 'Member Experience',
+    items: [
+      { href: '/dashboard/portal', label: 'Member Portal', icon: Sparkles, devOwner: 'Dev 1' },
+      { href: '/dashboard/profile', label: 'My Profile', icon: User, devOwner: 'Dev 1' },
+      { href: '/dashboard/membership-plans', label: 'Plans & Pricing', icon: Shield, devOwner: 'Dev 1' },
+    ],
+  },
+  {
+    title: 'Courts & Activities',
+    items: [
+      { href: '/dashboard/bookings', label: 'Bookings & Slots', icon: CalendarDays, devOwner: 'Dev 2' },
+      { href: '/dashboard/courts', label: 'Court Directory', icon: Activity, devOwner: 'Dev 2' },
+    ],
+  },
+  {
+    title: 'Commerce & Dining',
+    items: [
+      { href: '/dashboard/shop', label: 'Pro Shop', icon: ShoppingBag, devOwner: 'Dev 3' },
+      { href: '/dashboard/bar', label: 'Bar & Cafeteria', icon: Coffee, devOwner: 'Dev 3' },
+    ],
+  },
+];
+
+export function DashboardSidebar({ userRole }: { userRole?: string }) {
   const pathname = usePathname();
+  const sections = userRole === 'MEMBER' ? MEMBER_SIDEBAR_SECTIONS : SIDEBAR_SECTIONS;
 
   return (
     <aside className="w-64 border-r border-zinc-800 bg-zinc-950 flex flex-col shrink-0 h-screen sticky top-0 overflow-y-auto">
@@ -83,7 +109,7 @@ export function DashboardSidebar() {
       </div>
 
       <div className="flex-1 py-4 px-3 space-y-6">
-        {SIDEBAR_SECTIONS.map((section) => (
+        {sections.map((section) => (
           <div key={section.title} className="space-y-1">
             <h4 className="px-3 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
               {section.title}

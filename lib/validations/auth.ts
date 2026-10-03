@@ -12,10 +12,10 @@ export const registerSchema = z.object({
   email: z.string().trim().email('Invalid email address'),
   phone: z.string().trim().regex(/^[0-9+ -]{10,15}$/, 'Invalid phone number').optional().or(z.literal('')),
   password: z.string().min(6, 'Password must be at least 6 characters'),
-  role: z.enum(['OWNER', 'ADMIN', 'FRONT_DESK', 'SHOP_STAFF', 'BAR_STAFF', 'MEMBER'] as const).default('MEMBER'),
+  role: z.enum(['OWNER', 'ADMIN', 'FRONT_DESK', 'SHOP_STAFF', 'BAR_STAFF', 'MEMBER'] as const).optional().default('MEMBER'),
 });
 
-export type RegisterInput = z.infer<typeof registerSchema>;
+export type RegisterInput = z.input<typeof registerSchema>;
 
 export const profileUpdateSchema = z.object({
   fullName: z.string().trim().min(2, 'Full name must be at least 2 characters').optional(),

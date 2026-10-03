@@ -22,7 +22,7 @@ export default async function StaffDashboardPage() {
         ]}
       >
         <div className="p-6 bg-rose-950/20 border border-rose-900 text-rose-400 rounded-lg">
-          Failed to load staff data: {result.error || 'Unknown error'}
+          Failed to load staff data: {'error' in result ? String(result.error) : 'Unknown error'}
         </div>
       </DashboardModuleShell>
     );

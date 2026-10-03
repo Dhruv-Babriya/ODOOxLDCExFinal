@@ -1,20 +1,37 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { signInAction } from '@/actions/auth';
 import { LogIn } from 'lucide-react';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Validate redirectTo against open-redirect phishing
+  const getSafeRedirect = (userRole?: string): string => {
+    const rawRedirect = searchParams.get('redirectTo');
+    if (
+      rawRedirect &&
+      rawRedirect.startsWith('/') &&
+      !rawRedirect.startsWith('//') &&
+      !rawRedirect.includes(':') &&
+      !rawRedirect.includes('\\')
+    ) {
+      return rawRedirect;
+    }
+    // Default destination: Member users land on their self-service portal, staff land on dashboard overview
+    return userRole === 'MEMBER' ? '/dashboard/portal' : '/dashboard';
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,7 +46,8 @@ export default function LoginPage() {
       return;
     }
 
-    router.push('/dashboard');
+    const destination = getSafeRedirect(result.data?.role);
+    router.push(destination);
     router.refresh();
   };
 
@@ -82,9 +100,21 @@ export default function LoginPage() {
       <CardFooter className="flex justify-center border-t border-zinc-800/80 pt-4 text-xs text-zinc-400">
         <span>Need an account?</span>
         <Link href="/register" className="ml-1.5 text-emerald-400 hover:text-emerald-300 font-medium">
-          Create Member / Staff Account
+          Create Member Account
         </Link>
       </CardFooter>
     </Card>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <Card className="border-zinc-800 bg-zinc-900/70 p-6 text-center text-xs text-zinc-400">
+        Loading sign in...
+      </Card>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }

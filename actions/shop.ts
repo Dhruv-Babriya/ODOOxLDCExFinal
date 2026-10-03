@@ -11,6 +11,7 @@ import {
   productCategoryCreateSchema,
   inventoryAdjustmentSchema,
   updateShopOrderFulfillmentStatusSchema,
+  recordCommercePaymentSchema,
   type ShopOrderCreateInput,
   type CancelShopOrderInput,
   type UpdateShopOrderStatusInput,
@@ -20,6 +21,7 @@ import {
   type ProductCategoryCreateInput,
   type InventoryAdjustmentInput,
   type UpdateShopOrderFulfillmentStatusInput,
+  type RecordCommercePaymentInput,
 } from '@/lib/validations/shop';
 import { handleActionError, AppError, AuthorizationError } from '@/lib/errors';
 import { requireAuth, requirePermission } from '@/lib/auth/session';
@@ -110,6 +112,7 @@ export async function createShopOrderAction(
         .select(`
           id,
           status,
+          end_date,
           membership_plans (
             tier,
             shop_discount_percent
@@ -118,7 +121,13 @@ export async function createShopOrderAction(
         .eq('id', effectiveMemberId)
         .single();
 
-      if (member?.status === 'ACTIVE' && member.membership_plans) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const isMemberActive =
+        member &&
+        member.status === 'ACTIVE' &&
+        (!member.end_date || member.end_date >= todayStr);
+
+      if (isMemberActive && member.membership_plans) {
         shopDiscountPercent = Number(member.membership_plans.shop_discount_percent);
       }
     }
@@ -235,7 +244,7 @@ export async function cancelShopOrderAction(
     // Verify order exists and caller has authority
     const { data: order, error: fetchError } = await supabase
       .from('shop_orders')
-      .select('id, member_id, status')
+      .select('id, member_id, status, fulfillment_status')
       .eq('id', validated.orderId)
       .single();
 
@@ -243,8 +252,12 @@ export async function cancelShopOrderAction(
       throw new AppError('Order not found', 'NOT_FOUND', 404);
     }
 
-    if (order.status === 'CANCELLED') {
+    if (order.status === 'CANCELLED' || order.fulfillment_status === 'CANCELLED') {
       throw new AppError('Order is already cancelled.', 'BAD_REQUEST', 400);
+    }
+
+    if (order.status === 'COMPLETED' || ['COLLECTED', 'DELIVERED', 'COMPLETED'].includes(order.fulfillment_status)) {
+      throw new AppError('Completed or collected orders cannot be cancelled.', 'BAD_REQUEST', 400);
     }
 
     // Authorization: Shop staff/admins/owners, or member cancelling own non-completed order
@@ -597,7 +610,18 @@ export async function updateShopOrderFulfillmentStatusAction(
       p_notes: validated.notes || null,
     });
 
-    if (rpcErr) throw rpcErr;
+    if (rpcErr) {
+      if (rpcErr.message.includes('ALREADY_COLLECTED') || (rpcErr as { code?: string }).code === 'P0004') {
+        throw new AppError('This order has already been collected by the customer.', 'CONFLICT', 409);
+      }
+      if (rpcErr.message.includes('ALREADY_DELIVERED')) {
+        throw new AppError('This order has already been delivered.', 'CONFLICT', 409);
+      }
+      if (rpcErr.message.includes('INVALID_TRANSITION')) {
+        throw new AppError(rpcErr.message.replace(/^.*?INVALID_TRANSITION:\s*/, ''), 'BAD_REQUEST', 400);
+      }
+      throw rpcErr;
+    }
 
     // Determine derived app status for return payload
     let derivedStatus: OrderStatus = 'PENDING';
@@ -806,3 +830,93 @@ export async function getShopOperationalMetricsAction(): Promise<
     return handleActionError(err);
   }
 }
+
+/**
+ * Hardened Finance Integration: Records a completed payment for a shop order.
+ * Prevents duplicate payments using database partial unique index and transaction checks.
+ */
+export async function recordShopOrderPaymentAction(
+  input: RecordCommercePaymentInput
+): Promise<ActionResult<{ paymentId: string; paymentNumber: string }>> {
+  try {
+    const validated = recordCommercePaymentSchema.parse(input);
+    const user = await requireAuth();
+    const supabase = await createClient();
+
+    // 1. Fetch order
+    const { data: order, error: orderErr } = await supabase
+      .from('shop_orders')
+      .select('id, order_number, member_id, total_amount, status')
+      .eq('id', validated.orderId)
+      .single();
+
+    if (orderErr || !order) {
+      throw new AppError('Shop order not found.', 'NOT_FOUND', 404);
+    }
+
+    if (order.status === 'CANCELLED') {
+      throw new AppError('Cannot record payment for a cancelled order.', 'BAD_REQUEST', 400);
+    }
+
+    // Authorization: staff/admin or the purchasing member
+    const isStaff = ['OWNER', 'ADMIN', 'SHOP_STAFF', 'FRONT_DESK'].includes(user.role);
+    const isOwnerMember = user.role === 'MEMBER' && user.memberId && order.member_id === user.memberId;
+    if (!isStaff && !isOwnerMember) {
+      throw new AuthorizationError('You do not have permission to record payment for this order.');
+    }
+
+    // 2. Concurrency & Duplication Guard: Check if completed payment already exists
+    const { data: existingPayment } = await supabase
+      .from('payments')
+      .select('id, payment_number')
+      .eq('shop_order_id', validated.orderId)
+      .eq('status', 'COMPLETED')
+      .maybeSingle();
+
+    if (existingPayment) {
+      throw new AppError(
+        `Payment already recorded for this order (${existingPayment.payment_number}). Duplicate payment rejected.`,
+        'CONFLICT',
+        409
+      );
+    }
+
+    // 3. Insert payment record into public.payments
+    const paymentNumber = `PAY-SHOP-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
+
+    const { data: payment, error: payErr } = await supabase
+      .from('payments')
+      .insert({
+        payment_number: paymentNumber,
+        shop_order_id: validated.orderId,
+        member_id: order.member_id || null,
+        amount: validated.amount,
+        payment_method: validated.paymentMethod,
+        status: 'COMPLETED',
+        transaction_reference: validated.transactionReference || null,
+        recorded_by: user.id,
+      })
+      .select('id')
+      .single();
+
+    if (payErr) {
+      if (payErr.message.includes('idx_payments_shop_order_completed') || payErr.code === '23505') {
+        throw new AppError('Duplicate payment detected by database constraint.', 'CONFLICT', 409);
+      }
+      throw payErr;
+    }
+
+    revalidatePath('/dashboard/shop');
+    revalidatePath('/dashboard/payments');
+    revalidatePath('/dashboard/reports');
+
+    return {
+      success: true,
+      data: { paymentId: payment.id, paymentNumber },
+      message: `Payment ${paymentNumber} of ₹${validated.amount.toFixed(2)} recorded successfully.`,
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+

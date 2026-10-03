@@ -578,6 +578,7 @@ export interface MemberPortalData {
   }>;
   history: MembershipHistoryItem[];
   notifications: NotificationItem[];
+  availablePlans?: MembershipPlanItem[];
 }
 
 
