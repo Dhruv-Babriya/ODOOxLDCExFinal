@@ -4,40 +4,50 @@ import { BookingCalendar } from '@/components/dashboard/BookingCalendar';
 import { BookingsList } from '@/components/dashboard/BookingsList';
 import { Badge } from '@/components/ui/badge';
 import { ShieldCheck } from 'lucide-react';
+import {
+  getBookingsPaginatedAction,
+  getBookingDashboardMetricsAction,
+} from '@/actions/bookings';
+import { parsePaginationParams } from '@/lib/pagination';
 
-export default async function BookingsDashboardPage() {
+interface BookingsDashboardPageProps {
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+export default async function BookingsDashboardPage({
+  searchParams,
+}: BookingsDashboardPageProps) {
   const user = await getCurrentUser();
   const supabase = await createClient();
 
-  // Fetch courts for the calendar
+  // Await search parameters from URL query string
+  const resolvedParams = searchParams ? await searchParams : {};
+  const { page, pageSize, search, sortBy } = parsePaginationParams(resolvedParams);
+  const courtId = typeof resolvedParams.courtId === 'string' ? resolvedParams.courtId : undefined;
+  const status = typeof resolvedParams.status === 'string' ? resolvedParams.status : undefined;
+  const bookingType = typeof resolvedParams.bookingType === 'string' ? resolvedParams.bookingType : undefined;
+  const date = typeof resolvedParams.date === 'string' ? resolvedParams.date : undefined;
+
+  // 1. Fetch courts for both the calendar and court dropdown filters
   const { data: courts } = await supabase
     .from('courts')
     .select('id, name, sport_type, hourly_rate, is_indoor, is_active')
     .order('name');
 
-  // Fetch recent bookings
-  const { data: bookings } = await supabase
-    .from('court_bookings')
-    .select(`
-      id,
-      court_id,
-      member_id,
-      booking_type,
-      start_time,
-      end_time,
+  // 2. Fetch server-side paginated bookings slice & dashboard metrics concurrently
+  const [paginatedResult, metricsResult] = await Promise.all([
+    getBookingsPaginatedAction({
+      page,
+      pageSize,
+      search: search || undefined,
+      courtId,
       status,
-      base_price,
-      discount_amount,
-      final_price,
-      cancellation_reason,
-      cancelled_at,
-      notes,
-      created_at,
-      courts (name, sport_type),
-      members (profile_id, membership_number, profiles (full_name))
-    `)
-    .order('start_time', { ascending: false })
-    .limit(50);
+      bookingType,
+      date,
+      sortBy,
+    }),
+    getBookingDashboardMetricsAction(),
+  ]);
 
   const courtsList = (courts || []).map((c) => ({
     id: c.id,
@@ -48,27 +58,9 @@ export default async function BookingsDashboardPage() {
     isActive: c.is_active,
   }));
 
-  const bookingsList = (bookings || []).map((b) => ({
-    id: b.id,
-    courtId: b.court_id,
-    courtName: b.courts?.name || 'Unknown Court',
-    sportType: b.courts?.sport_type || 'TENNIS',
-    memberId: b.member_id,
-    memberName: b.members?.profiles?.full_name || null,
-    membershipNumber: b.members?.membership_number || null,
-    bookingType: b.booking_type,
-    startTime: b.start_time,
-    endTime: b.end_time,
-    status: b.status,
-    basePrice: Number(b.base_price),
-    discountAmount: Number(b.discount_amount),
-    finalPrice: Number(b.final_price),
-    cancellationReason: b.cancellation_reason,
-    cancelledAt: b.cancelled_at,
-    notes: b.notes,
-    createdAt: b.created_at,
-    isMine: (b.members as { profile_id?: string } | null)?.profile_id === user?.id,
-  }));
+  const initialBookings = paginatedResult.success ? paginatedResult.data.bookings : [];
+  const initialPagination = paginatedResult.success ? paginatedResult.data.pagination : undefined;
+  const initialMetrics = metricsResult.success ? metricsResult.data : null;
 
   return (
     <div className="space-y-8">
@@ -120,13 +112,23 @@ export default async function BookingsDashboardPage() {
         />
       </section>
 
-      {/* Bookings List */}
+      {/* Bookings List (Paginated with Server-Side Search, Filters, Sorting & Aggregates) */}
       <section>
         <h2 className="text-lg font-semibold text-white mb-4">Court Reservation Management</h2>
         <BookingsList
-          initialBookings={bookingsList}
+          initialBookings={initialBookings}
+          initialPagination={initialPagination}
+          initialMetrics={initialMetrics}
           courts={(courts || []).map((c) => ({ id: c.id, name: c.name }))}
           userRole={user?.role || 'MEMBER'}
+          initialFilters={{
+            search,
+            courtId,
+            status,
+            bookingType,
+            date,
+            sortBy,
+          }}
         />
       </section>
     </div>

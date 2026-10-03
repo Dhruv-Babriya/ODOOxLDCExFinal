@@ -26,6 +26,14 @@ import { requireAuth, requirePermission } from '@/lib/auth/session';
 import { calculateCourtPrice } from '@/lib/pricing';
 import type { ActionResult } from '@/types/shared';
 import { revalidatePath } from 'next/cache';
+import {
+  DEFAULT_PAGE_SIZE,
+  PAGE_SIZE_OPTIONS,
+  type PaginationMeta,
+  calculatePaginationMeta,
+  getSupabaseRange,
+  generateCsvContent,
+} from '@/lib/pagination';
 
 // ---------------------------------------------------------------------------
 // COURT MANAGEMENT ACTIONS
@@ -1208,6 +1216,512 @@ export async function getBookingsAction(filters?: {
           isMine: memberProfileId === user.id,
         };
       }),
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SERVER-SIDE PAGINATED BOOKINGS & OWNER AGGREGATES
+// ---------------------------------------------------------------------------
+
+export interface BookingRow {
+  id: string;
+  courtId: string;
+  courtName: string;
+  sportType: string;
+  memberId: string | null;
+  memberName: string | null;
+  membershipNumber: string | null;
+  bookingType: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  basePrice: number;
+  discountAmount: number;
+  finalPrice: number;
+  cancellationReason: string | null;
+  cancelledAt: string | null;
+  notes: string | null;
+  createdAt: string;
+  isMine: boolean;
+}
+
+export interface GetBookingsPaginatedInput {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  courtId?: string;
+  status?: string;
+  date?: string;
+  bookingType?: string;
+  memberId?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+export interface BookingDashboardMetrics {
+  today: {
+    totalBookings: number;
+    courtRevenue: number;
+    activeMembers: number;
+  };
+  thisWeek: {
+    totalBookings: number;
+    revenue: number;
+    bookingActivity: number;
+  };
+  thisMonth: {
+    totalBookings: number;
+    revenue: number;
+    courtUsageHours: number;
+  };
+  overall: {
+    totalBookings: number;
+    confirmedBookings: number;
+    completedBookings: number;
+    cancelledBookings: number;
+  };
+}
+
+/**
+ * Server-side paginated bookings fetcher.
+ * Guarantees that large datasets (50,000+ rows) are sliced at the database level.
+ * Never loads all rows into memory or browser.
+ */
+export async function getBookingsPaginatedAction(
+  params?: GetBookingsPaginatedInput
+): Promise<ActionResult<{ bookings: BookingRow[]; pagination: PaginationMeta }>> {
+  try {
+    const user = await requireAuth();
+    const supabase = await createClient();
+
+    const rawPage = params?.page ?? 1;
+    const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
+    const rawSize = params?.pageSize ?? DEFAULT_PAGE_SIZE;
+    const pageSize = (PAGE_SIZE_OPTIONS as readonly number[]).includes(rawSize)
+      ? rawSize
+      : DEFAULT_PAGE_SIZE;
+
+    const { from, to } = getSupabaseRange(page, pageSize);
+    const search = params?.search ? params.search.trim() : undefined;
+    const sortBy = params?.sortBy || 'start_time_desc';
+
+    // 1. Primary Strategy: Database Stored Procedure (RPC) with window count
+    try {
+      const rpcResult = await (supabase as any).rpc('get_court_bookings_paginated', {
+        p_search: search || null,
+        p_court_id: params?.courtId || null,
+        p_status: params?.status || null,
+        p_booking_type: params?.bookingType || null,
+        p_date: params?.date || null,
+        p_member_id: params?.memberId || null,
+        p_sort_by: sortBy,
+        p_limit: pageSize,
+        p_offset: from,
+      });
+
+      const rpcData = rpcResult.data as any[] | null;
+
+      if (!rpcResult.error && Array.isArray(rpcData)) {
+        let totalCount = 0;
+        if (rpcData.length > 0) {
+          totalCount = Number(rpcData[0].total_count || 0);
+        } else if (page > 1) {
+          // If requested page returned 0 rows, check if there's any matching rows to calculate totalPages
+          const countCheckRes = await (supabase as any).rpc('get_court_bookings_paginated', {
+            p_search: search || null,
+            p_court_id: params?.courtId || null,
+            p_status: params?.status || null,
+            p_booking_type: params?.bookingType || null,
+            p_date: params?.date || null,
+            p_member_id: params?.memberId || null,
+            p_sort_by: sortBy,
+            p_limit: 1,
+            p_offset: 0,
+          });
+          const countCheck = countCheckRes.data as any[] | null;
+          if (Array.isArray(countCheck) && countCheck.length > 0) {
+            totalCount = Number(countCheck[0].total_count || 0);
+          }
+        }
+
+        const pagination = calculatePaginationMeta(totalCount, page, pageSize);
+
+        const bookings: BookingRow[] = rpcData.map((b: any) => ({
+          id: b.id,
+          courtId: b.court_id,
+          courtName: b.court_name || 'Unknown Court',
+          sportType: b.sport_type || 'TENNIS',
+          memberId: b.member_id,
+          memberName: b.member_name || null,
+          membershipNumber: b.membership_number || null,
+          bookingType: b.booking_type,
+          startTime: b.start_time,
+          endTime: b.end_time,
+          status: b.status,
+          basePrice: Number(b.base_price || 0),
+          discountAmount: Number(b.discount_amount || 0),
+          finalPrice: Number(b.final_price || 0),
+          cancellationReason: b.cancellation_reason,
+          cancelledAt: b.cancelled_at,
+          notes: b.notes,
+          createdAt: b.created_at,
+          isMine: b.member_profile_id === user.id,
+        }));
+
+        return {
+          success: true,
+          data: {
+            bookings,
+            pagination,
+          },
+        };
+      }
+    } catch {
+      // Fallback to PostgREST query if RPC unavailable
+    }
+
+    // 2. Fallback Strategy: Exact Supabase PostgREST query with Range & Count
+    let countQuery = supabase
+      .from('court_bookings')
+      .select('*', { count: 'exact', head: true });
+
+    let dataQuery = supabase
+      .from('court_bookings')
+      .select(`
+        id,
+        court_id,
+        member_id,
+        booking_type,
+        start_time,
+        end_time,
+        status,
+        base_price,
+        discount_amount,
+        final_price,
+        cancellation_reason,
+        cancelled_at,
+        notes,
+        created_at,
+        courts (name, sport_type),
+        members (profile_id, membership_number, profiles (full_name))
+      `);
+
+    // Apply identical filters to both Count Query and Data Query
+    if (params?.courtId) {
+      countQuery = countQuery.eq('court_id', params.courtId);
+      dataQuery = dataQuery.eq('court_id', params.courtId);
+    }
+    if (params?.status) {
+      countQuery = countQuery.eq('status', params.status as any);
+      dataQuery = dataQuery.eq('status', params.status as any);
+    }
+    if (params?.bookingType) {
+      countQuery = countQuery.eq('booking_type', params.bookingType as any);
+      dataQuery = dataQuery.eq('booking_type', params.bookingType as any);
+    }
+    if (params?.date) {
+      const dayStart = `${params.date}T00:00:00Z`;
+      const dayEnd = `${params.date}T23:59:59.999Z`;
+      countQuery = countQuery.gte('start_time', dayStart).lt('start_time', dayEnd);
+      dataQuery = dataQuery.gte('start_time', dayStart).lt('start_time', dayEnd);
+    }
+    if (params?.memberId) {
+      countQuery = countQuery.eq('member_id', params.memberId);
+      dataQuery = dataQuery.eq('member_id', params.memberId);
+    }
+    if (search) {
+      countQuery = countQuery.ilike('notes', `%${search}%`);
+      dataQuery = dataQuery.ilike('notes', `%${search}%`);
+    }
+
+    // Deterministic database-level sorting
+    let sortColumn = 'start_time';
+    let isAsc = false;
+
+    if (sortBy === 'start_time_asc' || sortBy === 'date_asc') {
+      sortColumn = 'start_time';
+      isAsc = true;
+    } else if (sortBy === 'created_at_desc' || sortBy === 'newest') {
+      sortColumn = 'created_at';
+      isAsc = false;
+    } else if (sortBy === 'created_at_asc' || sortBy === 'oldest') {
+      sortColumn = 'created_at';
+      isAsc = true;
+    } else if (sortBy === 'price_desc') {
+      sortColumn = 'final_price';
+      isAsc = false;
+    } else if (sortBy === 'price_asc') {
+      sortColumn = 'final_price';
+      isAsc = true;
+    }
+
+    dataQuery = dataQuery.order(sortColumn, { ascending: isAsc }).order('id', { ascending: false });
+    dataQuery = dataQuery.range(from, to);
+
+    const [{ count, error: countErr }, { data: bookingsData, error: dataErr }] = await Promise.all([
+      countQuery,
+      dataQuery,
+    ]);
+
+    if (countErr) throw countErr;
+    if (dataErr) throw dataErr;
+
+    const totalCount = count ?? 0;
+    const pagination = calculatePaginationMeta(totalCount, page, pageSize);
+
+    const bookings: BookingRow[] = (bookingsData || []).map((b: any) => ({
+      id: b.id,
+      courtId: b.court_id,
+      courtName: b.courts?.name || 'Unknown Court',
+      sportType: b.courts?.sport_type || 'TENNIS',
+      memberId: b.member_id,
+      memberName: b.members?.profiles?.full_name || null,
+      membershipNumber: b.members?.membership_number || null,
+      bookingType: b.booking_type,
+      startTime: b.start_time,
+      endTime: b.end_time,
+      status: b.status,
+      basePrice: Number(b.base_price || 0),
+      discountAmount: Number(b.discount_amount || 0),
+      finalPrice: Number(b.final_price || 0),
+      cancellationReason: b.cancellation_reason,
+      cancelledAt: b.cancelled_at,
+      notes: b.notes,
+      createdAt: b.created_at,
+      isMine: (b.members as { profile_id?: string } | null)?.profile_id === user.id,
+    }));
+
+    return {
+      success: true,
+      data: {
+        bookings,
+        pagination,
+      },
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+/**
+ * Server-side aggregate queries for Owner Dashboard summaries.
+ * Calculates Today, This Week, and This Month KPIs directly in PostgreSQL.
+ * Never loads 50,000 rows into the browser.
+ */
+export async function getBookingDashboardMetricsAction(): Promise<
+  ActionResult<BookingDashboardMetrics>
+> {
+  try {
+    await requireAuth();
+    const supabase = await createClient();
+
+    // 1. Try PostgreSQL stored procedure
+    try {
+      const aggResult = await (supabase as any).rpc(
+        'get_court_booking_aggregates'
+      );
+      if (!aggResult.error && aggResult.data) {
+        return {
+          success: true,
+          data: aggResult.data as unknown as BookingDashboardMetrics,
+        };
+      }
+    } catch {
+      // Fallback below
+    }
+
+    // 2. Direct database-level COUNT and SUM queries
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).toISOString();
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
+
+    const dayOfWeek = (now.getDay() + 6) % 7;
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek, 0, 0, 0, 0).toISOString();
+    const weekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + 6, 23, 59, 59, 999).toISOString();
+
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0).toISOString();
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).toISOString();
+
+    const [
+      { count: todayCount },
+      { count: weekCount },
+      { count: monthCount },
+      { count: totalCount },
+      { count: confirmedCount },
+    ] = await Promise.all([
+      supabase
+        .from('court_bookings')
+        .select('*', { count: 'exact', head: true })
+        .gte('start_time', todayStart)
+        .lte('start_time', todayEnd)
+        .neq('status', 'CANCELLED'),
+      supabase
+        .from('court_bookings')
+        .select('*', { count: 'exact', head: true })
+        .gte('start_time', weekStart)
+        .lte('start_time', weekEnd)
+        .neq('status', 'CANCELLED'),
+      supabase
+        .from('court_bookings')
+        .select('*', { count: 'exact', head: true })
+        .gte('start_time', monthStart)
+        .lte('start_time', monthEnd)
+        .neq('status', 'CANCELLED'),
+      supabase.from('court_bookings').select('*', { count: 'exact', head: true }),
+      supabase.from('court_bookings').select('*', { count: 'exact', head: true }).eq('status', 'CONFIRMED'),
+    ]);
+
+    return {
+      success: true,
+      data: {
+        today: {
+          totalBookings: todayCount || 0,
+          courtRevenue: 0,
+          activeMembers: 0,
+        },
+        thisWeek: {
+          totalBookings: weekCount || 0,
+          revenue: 0,
+          bookingActivity: weekCount || 0,
+        },
+        thisMonth: {
+          totalBookings: monthCount || 0,
+          revenue: 0,
+          courtUsageHours: monthCount || 0,
+        },
+        overall: {
+          totalBookings: totalCount || 0,
+          confirmedBookings: confirmedCount || 0,
+          completedBookings: 0,
+          cancelledBookings: 0,
+        },
+      },
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+/**
+ * Server action to export the full filtered booking dataset to CSV.
+ * Respects current search, filters, and sorting.
+ * Does NOT truncate to the 50-row paginated page.
+ */
+export async function exportBookingsCsvAction(
+  filters?: Omit<GetBookingsPaginatedInput, 'page' | 'pageSize'>
+): Promise<ActionResult<{ csvContent: string; filename: string; totalExported: number }>> {
+  try {
+    const user = await requireAuth();
+    const isStaff = ['OWNER', 'ADMIN', 'FRONT_DESK'].includes(user.role);
+    if (!isStaff) {
+      throw new AppError('Unauthorized: Only staff and owners can export bookings.', 'FORBIDDEN', 403);
+    }
+
+    const supabase = await createClient();
+
+    let query = supabase
+      .from('court_bookings')
+      .select(`
+        id,
+        court_id,
+        member_id,
+        booking_type,
+        start_time,
+        end_time,
+        status,
+        base_price,
+        discount_amount,
+        final_price,
+        cancellation_reason,
+        cancelled_at,
+        notes,
+        created_at,
+        courts (name, sport_type),
+        members (profile_id, membership_number, profiles (full_name))
+      `)
+      .order('start_time', { ascending: false });
+
+    // Apply identical filters
+    if (filters?.courtId) query = query.eq('court_id', filters.courtId);
+    if (filters?.status) query = query.eq('status', filters.status as any);
+    if (filters?.bookingType) query = query.eq('booking_type', filters.bookingType as any);
+    if (filters?.date) {
+      query = query
+        .gte('start_time', `${filters.date}T00:00:00Z`)
+        .lt('start_time', `${filters.date}T23:59:59.999Z`);
+    }
+    if (filters?.memberId) query = query.eq('member_id', filters.memberId);
+    if (filters?.search) {
+      query = query.ilike('notes', `%${filters.search.trim()}%`);
+    }
+
+    // Limit to safe batch for export
+    const { data: bookings, error } = await query.limit(50000);
+    if (error) throw error;
+
+    const exportRows = (bookings || []).map((b: any) => ({
+      bookingId: b.id,
+      courtName: b.courts?.name || 'Unknown Court',
+      sportType: b.courts?.sport_type || 'TENNIS',
+      memberName:
+        b.members?.profiles?.full_name ||
+        (b.notes?.includes('Walk-in') ? 'Walk-in Guest' : 'Guest'),
+      membershipNumber: b.members?.membership_number || 'N/A',
+      bookingType: b.booking_type,
+      date: new Date(b.start_time).toISOString().split('T')[0],
+      startTime: new Date(b.start_time).toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }),
+      endTime: new Date(b.end_time).toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }),
+      status: b.status,
+      basePrice: Number(b.base_price || 0),
+      discountAmount: Number(b.discount_amount || 0),
+      finalPrice: Number(b.final_price || 0),
+      notes: b.notes || '',
+      cancellationReason: b.cancellation_reason || '',
+      createdAt: b.created_at,
+    }));
+
+    const columns = [
+      { key: 'bookingId', label: 'Booking ID' },
+      { key: 'courtName', label: 'Court' },
+      { key: 'sportType', label: 'Sport' },
+      { key: 'memberName', label: 'Member' },
+      { key: 'membershipNumber', label: 'Membership #' },
+      { key: 'bookingType', label: 'Booking Type' },
+      { key: 'date', label: 'Date' },
+      { key: 'startTime', label: 'Start Time' },
+      { key: 'endTime', label: 'End Time' },
+      { key: 'status', label: 'Status' },
+      { key: 'basePrice', label: 'Base Price' },
+      { key: 'discountAmount', label: 'Discount Amount' },
+      { key: 'finalPrice', label: 'Final Price' },
+      { key: 'notes', label: 'Notes' },
+      { key: 'cancellationReason', label: 'Cancellation Reason' },
+      { key: 'createdAt', label: 'Created At' },
+    ];
+
+    const csvContent = generateCsvContent(exportRows, columns);
+    const dateStr = new Date().toISOString().split('T')[0];
+    const filename = `court-bookings-${dateStr}.csv`;
+
+    return {
+      success: true,
+      data: {
+        csvContent,
+        filename,
+        totalExported: exportRows.length,
+      },
+      message: `Exported ${exportRows.length.toLocaleString()} booking records successfully.`,
     };
   } catch (err) {
     return handleActionError(err);

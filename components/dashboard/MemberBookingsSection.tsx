@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { formatCurrency, formatTime, formatDate } from '@/lib/utils';
 import { cancelBookingAction } from '@/actions/bookings';
+import { Pagination } from '@/components/ui/pagination';
 import {
   CalendarDays,
   Clock,
@@ -35,6 +36,8 @@ interface MemberBookingsSectionProps {
 
 export function MemberBookingsSection({ bookings: initialBookings }: MemberBookingsSectionProps) {
   const [bookings, setBookings] = useState(initialBookings);
+  const [pastPage, setPastPage] = useState(1);
+  const pastPageSize = 10;
   const [cancelBookingId, setCancelBookingId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -187,46 +190,61 @@ export function MemberBookingsSection({ bookings: initialBookings }: MemberBooki
       {/* Past / Cancelled History */}
       {pastOrCancelled.length > 0 && (
         <Card className="border-zinc-800 bg-zinc-900/40">
-          <CardHeader className="pb-3 border-b border-zinc-800/60">
+          <CardHeader className="pb-3 border-b border-zinc-800/60 flex flex-row items-center justify-between">
             <CardTitle className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-              Past Reservations & History
+              Past Reservations & History ({pastOrCancelled.length})
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-3">
             <div className="divide-y divide-zinc-800/60 text-xs">
-              {pastOrCancelled.slice(0, 10).map((b) => (
-                <div key={b.id} className="py-2.5 flex items-center justify-between">
-                  <div>
-                    <span className="font-medium text-zinc-200 block">{b.courtName}</span>
-                    <span className="text-[10px] text-zinc-500">
-                      {formatDate(b.startTime)} • {formatTime(b.startTime)}
-                    </span>
-                    {b.status === 'CANCELLED' && b.cancellationReason && (
-                      <span className="block text-[10px] text-rose-400/80 mt-0.5">
-                        Cancelled: {b.cancellationReason}
+              {pastOrCancelled
+                .slice((pastPage - 1) * pastPageSize, pastPage * pastPageSize)
+                .map((b) => (
+                  <div key={b.id} className="py-2.5 flex items-center justify-between">
+                    <div>
+                      <span className="font-medium text-zinc-200 block">{b.courtName}</span>
+                      <span className="text-[10px] text-zinc-500">
+                        {formatDate(b.startTime)} • {formatTime(b.startTime)}
                       </span>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <Badge
-                      variant={
-                        b.status === 'COMPLETED'
-                          ? 'default'
-                          : b.status === 'CANCELLED'
-                          ? 'destructive'
-                          : 'outline'
-                      }
-                      className="text-[10px]"
-                    >
-                      {b.status}
-                    </Badge>
-                    <div className="text-[10px] text-zinc-500 mt-0.5">
-                      {formatCurrency(b.finalPrice)}
+                      {b.status === 'CANCELLED' && b.cancellationReason && (
+                        <span className="block text-[10px] text-rose-400/80 mt-0.5">
+                          Cancelled: {b.cancellationReason}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <Badge
+                        variant={
+                          b.status === 'COMPLETED'
+                            ? 'default'
+                            : b.status === 'CANCELLED'
+                            ? 'destructive'
+                            : 'outline'
+                        }
+                        className="text-[10px]"
+                      >
+                        {b.status}
+                      </Badge>
+                      <div className="text-[10px] text-zinc-500 mt-0.5">
+                        {formatCurrency(b.finalPrice)}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
             </div>
+
+            {pastOrCancelled.length > pastPageSize && (
+              <div className="pt-3 border-t border-zinc-800/60 mt-2">
+                <Pagination
+                  currentPage={pastPage}
+                  pageSize={pastPageSize}
+                  totalCount={pastOrCancelled.length}
+                  totalPages={Math.max(1, Math.ceil(pastOrCancelled.length / pastPageSize))}
+                  onPageChange={setPastPage}
+                  itemLabel="records"
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
