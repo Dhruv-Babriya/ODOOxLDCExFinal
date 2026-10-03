@@ -71,7 +71,7 @@ export async function recordPaymentAction(
     if (validated.bookingId) {
       const { data: booking, error: bookingError } = await supabase
         .from('court_bookings')
-        .select('id, status')
+        .select('id, status, final_price')
         .eq('id', validated.bookingId)
         .single();
 
@@ -82,13 +82,28 @@ export async function recordPaymentAction(
           code: 'INVALID_REFERENCE',
         };
       }
+
+      const { data: existingPayments } = await supabase
+        .from('payments')
+        .select('amount')
+        .eq('booking_id', validated.bookingId)
+        .neq('status', 'FAILED');
+      
+      const paidSoFar = existingPayments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+      if (paidSoFar + validated.amount > Number(booking.final_price) + 0.01) {
+        return {
+          success: false,
+          error: `Payment amount (₹${validated.amount}) exceeds outstanding balance (₹${(Number(booking.final_price) - paidSoFar).toFixed(2)}).`,
+          code: 'OVERPAYMENT',
+        };
+      }
     }
 
     // Validate shop order reference if provided
     if (validated.shopOrderId) {
       const { data: order, error: orderError } = await supabase
         .from('shop_orders')
-        .select('id')
+        .select('id, total_amount')
         .eq('id', validated.shopOrderId)
         .single();
 
@@ -99,13 +114,28 @@ export async function recordPaymentAction(
           code: 'INVALID_REFERENCE',
         };
       }
+
+      const { data: existingPayments } = await supabase
+        .from('payments')
+        .select('amount')
+        .eq('shop_order_id', validated.shopOrderId)
+        .neq('status', 'FAILED');
+      
+      const paidSoFar = existingPayments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+      if (paidSoFar + validated.amount > Number(order.total_amount) + 0.01) {
+        return {
+          success: false,
+          error: `Payment amount (₹${validated.amount}) exceeds outstanding balance (₹${(Number(order.total_amount) - paidSoFar).toFixed(2)}).`,
+          code: 'OVERPAYMENT',
+        };
+      }
     }
 
     // Validate bar order reference if provided
     if (validated.barOrderId) {
       const { data: barOrder, error: barOrderError } = await supabase
         .from('bar_orders')
-        .select('id')
+        .select('id, total_amount')
         .eq('id', validated.barOrderId)
         .single();
 
@@ -114,6 +144,21 @@ export async function recordPaymentAction(
           success: false,
           error: 'Referenced bar order not found.',
           code: 'INVALID_REFERENCE',
+        };
+      }
+
+      const { data: existingPayments } = await supabase
+        .from('payments')
+        .select('amount')
+        .eq('bar_order_id', validated.barOrderId)
+        .neq('status', 'FAILED');
+      
+      const paidSoFar = existingPayments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+      if (paidSoFar + validated.amount > Number(barOrder.total_amount) + 0.01) {
+        return {
+          success: false,
+          error: `Payment amount (₹${validated.amount}) exceeds outstanding balance (₹${(Number(barOrder.total_amount) - paidSoFar).toFixed(2)}).`,
+          code: 'OVERPAYMENT',
         };
       }
     }

@@ -255,7 +255,7 @@ export interface StaffDashboardData {
 
 export async function getStaffDashboardDataAction(): Promise<ActionResult<StaffDashboardData>> {
   try {
-    await requireAuth();
+    await requirePermission('shifts:read');
     const supabase = await createClient();
 
     // 1. Fetch Staff with Profiles
