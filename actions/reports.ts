@@ -111,7 +111,8 @@ export async function getOwnerDashboardMetricsAction(): Promise<ActionResult<Own
       .from('bar_orders')
       .select('total_amount')
       .not('tab_id', 'is', null)
-      .not('order_status', 'in', '("COMPLETED","CANCELLED")');
+      .neq('order_status', 'COMPLETED')
+      .neq('order_status', 'CANCELLED');
 
     const openTabsBalance = (openTabOrders || []).reduce((acc, o) => acc + Number(o.total_amount || 0), 0);
 
@@ -139,4 +140,3 @@ export async function getOwnerDashboardMetricsAction(): Promise<ActionResult<Own
     return handleActionError(error);
   }
 }
-
