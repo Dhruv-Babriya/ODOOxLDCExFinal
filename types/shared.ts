@@ -112,6 +112,13 @@ export const ORDER_STATUSES: readonly OrderStatus[] = [
   'CANCELLED',
 ] as const;
 
+export type FulfillmentType = 'PICKUP' | 'DELIVERY';
+
+export const FULFILLMENT_TYPES: readonly FulfillmentType[] = [
+  'PICKUP',
+  'DELIVERY',
+] as const;
+
 export type InventoryTransactionType =
   | 'PURCHASE_RECEIPT'
   | 'SALE_COUNTER'

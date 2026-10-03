@@ -1,15 +1,33 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { shopOrderCreateSchema, type ShopOrderCreateInput } from '@/lib/validations/shop';
-import { handleActionError, AppError } from '@/lib/errors';
-import { requireAuth } from '@/lib/auth/session';
+import {
+  shopOrderCreateSchema,
+  cancelShopOrderSchema,
+  updateShopOrderStatusSchema,
+  productCreateSchema,
+  productUpdateSchema,
+  productToggleActiveSchema,
+  productCategoryCreateSchema,
+  inventoryAdjustmentSchema,
+  type ShopOrderCreateInput,
+  type CancelShopOrderInput,
+  type UpdateShopOrderStatusInput,
+  type ProductCreateInput,
+  type ProductUpdateInput,
+  type ProductToggleActiveInput,
+  type ProductCategoryCreateInput,
+  type InventoryAdjustmentInput,
+} from '@/lib/validations/shop';
+import { handleActionError, AppError, AuthorizationError } from '@/lib/errors';
+import { requireAuth, requirePermission } from '@/lib/auth/session';
 import { calculateShopPrice } from '@/lib/pricing';
-import type { ActionResult } from '@/types/shared';
+import type { ActionResult, OrderChannel, OrderStatus, InventoryTransactionType } from '@/types/shared';
 import { revalidatePath } from 'next/cache';
 
 /**
- * Server action to create a shop order and atomically deduct inventory
+ * Creates a shop order with server-side pricing, member tier discounts,
+ * safe concurrent stock deduction, and support for pickup / delivery fulfillment.
  */
 export async function createShopOrderAction(
   input: ShopOrderCreateInput
@@ -19,20 +37,54 @@ export async function createShopOrderAction(
     const user = await requireAuth();
     const supabase = await createClient();
 
-    // 1. Fetch product prices and verify availability
-    const productIds = validated.items.map((i) => i.productId);
+    // Enforce channel permissions
+    if (validated.orderChannel === 'COUNTER') {
+      const allowedRoles = ['OWNER', 'ADMIN', 'SHOP_STAFF', 'FRONT_DESK'];
+      if (!allowedRoles.includes(user.role)) {
+        throw new AuthorizationError('Only staff can process physical counter sales.');
+      }
+    }
+
+    // 1. Fetch products and verify active status
+    const productIds = Array.from(new Set(validated.items.map((i) => i.productId)));
     const { data: products, error: prodError } = await supabase
       .from('products')
       .select('id, name, price, is_active')
       .in('id', productIds);
 
     if (prodError || !products || products.length !== productIds.length) {
-      throw new AppError('One or more products could not be found', 'NOT_FOUND', 404);
+      throw new AppError('One or more selected products could not be found.', 'NOT_FOUND', 404);
+    }
+
+    const inactiveProduct = products.find((p) => !p.is_active);
+    if (inactiveProduct) {
+      throw new AppError(`Product "${inactiveProduct.name}" is currently deactivated.`, 'BAD_REQUEST', 400);
     }
 
     const priceMap = new Map(products.map((p) => [p.id, Number(p.price)]));
 
-    // 2. Calculate subtotal
+    // 2. Pre-verify current inventory levels to fail fast before mutation
+    const { data: inventoryLevels, error: invError } = await supabase
+      .from('inventory')
+      .select('product_id, quantity_on_hand')
+      .in('product_id', productIds);
+
+    if (invError) throw invError;
+    const invMap = new Map(inventoryLevels?.map((i) => [i.product_id, i.quantity_on_hand]) ?? []);
+
+    for (const item of validated.items) {
+      const available = invMap.get(item.productId) ?? 0;
+      if (available < item.quantity) {
+        const prod = products.find((p) => p.id === item.productId);
+        throw new AppError(
+          `Insufficient stock for "${prod?.name || 'Item'}". Requested: ${item.quantity}, Available: ${available}`,
+          'INSUFFICIENT_STOCK',
+          400
+        );
+      }
+    }
+
+    // 3. Compute subtotal server-side
     let subtotal = 0;
     const orderItems = validated.items.map((item) => {
       const unitPrice = priceMap.get(item.productId) ?? 0;
@@ -46,17 +98,22 @@ export async function createShopOrderAction(
       };
     });
 
-    // 3. Determine member discount
+    // 4. Compute member discount server-side using shared contract
     let shopDiscountPercent = 0;
-    if (validated.memberId) {
+    const effectiveMemberId = validated.memberId || (user.role === 'MEMBER' ? user.memberId : null);
+
+    if (effectiveMemberId) {
       const { data: member } = await supabase
         .from('members')
         .select(`
           id,
           status,
-          membership_plans (shop_discount_percent)
+          membership_plans (
+            tier,
+            shop_discount_percent
+          )
         `)
-        .eq('id', validated.memberId)
+        .eq('id', effectiveMemberId)
         .single();
 
       if (member?.status === 'ACTIVE' && member.membership_plans) {
@@ -69,16 +126,24 @@ export async function createShopOrderAction(
       shopDiscountPercent,
     });
 
-    // Generate unique order number
-    const orderNumber = `ORD-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
+    // Generate unique order number (e.g. SH-2026-X1Y2Z)
+    const orderNumber = `SH-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase()}-${Math.floor(
+      100 + Math.random() * 900
+    )}`;
 
-    // 4. Create shop order record
+    // 5. Create shop order record
     const { data: order, error: orderError } = await supabase
       .from('shop_orders')
       .insert({
         order_number: orderNumber,
-        member_id: validated.memberId || null,
-        order_channel: validated.orderChannel,
+        member_id: effectiveMemberId || null,
+        order_channel: validated.orderChannel as OrderChannel,
+        fulfillment_type: validated.fulfillmentType,
+        delivery_address: validated.deliveryAddress || null,
+        customer_name: validated.customerName || (user.role === 'MEMBER' ? user.fullName : null),
+        customer_phone: validated.customerPhone || user.phone || null,
+        customer_email: validated.customerEmail || (user.role === 'MEMBER' ? user.email : null),
+        notes: validated.notes || null,
         status: 'PROCESSING',
         subtotal: pricing.subtotal,
         discount_amount: pricing.discountAmount,
@@ -90,7 +155,7 @@ export async function createShopOrderAction(
 
     if (orderError) throw orderError;
 
-    // 5. Insert order items
+    // 6. Insert order items
     const { error: itemsError } = await supabase.from('shop_order_items').insert(
       orderItems.map((item) => ({
         order_id: order.id,
@@ -101,31 +166,364 @@ export async function createShopOrderAction(
       }))
     );
 
-    if (itemsError) throw itemsError;
+    if (itemsError) {
+      // Cleanup order record on failure
+      await supabase.from('shop_orders').delete().eq('id', order.id);
+      throw itemsError;
+    }
 
-    // 6. Atomically deduct inventory for each item using stored procedure
+    // 7. Atomically deduct inventory with row locking in stored procedure.
+    // If any deduction fails (e.g. race condition), roll back previously deducted items and clean up.
     const txType = validated.orderChannel === 'COUNTER' ? 'SALE_COUNTER' : 'SALE_ONLINE';
+    const deductedItems: Array<{ productId: string; quantity: number }> = [];
+
     for (const item of orderItems) {
       const { error: deductError } = await supabase.rpc('deduct_inventory', {
         p_product_id: item.productId,
         p_quantity: item.quantity,
         p_tx_type: txType,
         p_reference_id: order.id,
-        p_notes: `Order ${orderNumber}`,
+        p_notes: `Order ${orderNumber} (${validated.fulfillmentType})`,
       });
 
       if (deductError) {
+        // Rollback already deducted items in this order
+        for (const done of deductedItems) {
+          await supabase.rpc('adjust_inventory', {
+            p_product_id: done.productId,
+            p_quantity_change: done.quantity,
+            p_tx_type: 'RETURN',
+            p_reference_id: order.id,
+            p_notes: `Rollback deduction failure for order ${orderNumber}`,
+          });
+        }
+        // Mark order as cancelled
+        await supabase.from('shop_orders').update({ status: 'CANCELLED' }).eq('id', order.id);
         throw deductError;
       }
+
+      deductedItems.push({ productId: item.productId, quantity: item.quantity });
     }
 
     revalidatePath('/dashboard/shop');
     revalidatePath('/dashboard/inventory');
+    revalidatePath('/shop');
 
     return {
       success: true,
       data: { orderId: order.id, orderNumber },
-      message: 'Order created successfully.',
+      message: `Order ${orderNumber} created successfully.`,
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+/**
+ * Cancels a shop order and restores inventory atomically via cancel_shop_order RPC
+ */
+export async function cancelShopOrderAction(
+  input: CancelShopOrderInput
+): Promise<ActionResult<{ orderId: string }>> {
+  try {
+    const validated = cancelShopOrderSchema.parse(input);
+    const user = await requireAuth();
+    const supabase = await createClient();
+
+    // Verify order exists and caller has authority
+    const { data: order, error: fetchError } = await supabase
+      .from('shop_orders')
+      .select('id, member_id, status')
+      .eq('id', validated.orderId)
+      .single();
+
+    if (fetchError || !order) {
+      throw new AppError('Order not found', 'NOT_FOUND', 404);
+    }
+
+    if (order.status === 'CANCELLED') {
+      throw new AppError('Order is already cancelled.', 'BAD_REQUEST', 400);
+    }
+
+    // Authorization: Shop staff/admins/owners, or member cancelling own non-completed order
+    const isStaff = ['OWNER', 'ADMIN', 'SHOP_STAFF'].includes(user.role);
+    const isOwnMemberOrder = user.role === 'MEMBER' && user.memberId && order.member_id === user.memberId;
+
+    if (!isStaff && !isOwnMemberOrder) {
+      throw new AuthorizationError('You do not have permission to cancel this order.');
+    }
+
+    // Call atomic cancel RPC which restores inventory & writes RETURN transactions
+    const { error: cancelError } = await supabase.rpc('cancel_shop_order', {
+      p_order_id: validated.orderId,
+      p_reason: validated.reason ?? 'Order cancelled by user',
+    });
+
+    if (cancelError) throw cancelError;
+
+    revalidatePath('/dashboard/shop');
+    revalidatePath('/dashboard/inventory');
+    revalidatePath('/shop');
+
+    return {
+      success: true,
+      data: { orderId: validated.orderId },
+      message: 'Order cancelled and stock restored to inventory.',
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+/**
+ * Updates shop order status (PENDING -> PROCESSING -> COMPLETED)
+ */
+export async function updateShopOrderStatusAction(
+  input: UpdateShopOrderStatusInput
+): Promise<ActionResult<{ orderId: string; status: string }>> {
+  try {
+    const validated = updateShopOrderStatusSchema.parse(input);
+    await requirePermission('shop_orders:manage');
+    const supabase = await createClient();
+
+    if (validated.status === 'CANCELLED') {
+      // Delegate to cancel action for safe stock restoration
+      const cancelRes = await cancelShopOrderAction({ orderId: validated.orderId, reason: 'Status updated to cancelled' });
+      if (!cancelRes.success) return cancelRes;
+      return {
+        success: true,
+        data: { orderId: validated.orderId, status: 'CANCELLED' },
+        message: cancelRes.message,
+      };
+    }
+
+    const { error } = await supabase
+      .from('shop_orders')
+      .update({ status: validated.status as OrderStatus, updated_at: new Date().toISOString() })
+      .eq('id', validated.orderId);
+
+    if (error) throw error;
+
+    revalidatePath('/dashboard/shop');
+
+    return {
+      success: true,
+      data: { orderId: validated.orderId, status: validated.status },
+      message: `Order status updated to ${validated.status}.`,
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+/**
+ * Creates a new catalog product with optional initial inventory
+ */
+export async function createProductAction(
+  input: ProductCreateInput
+): Promise<ActionResult<{ productId: string }>> {
+  try {
+    const validated = productCreateSchema.parse(input);
+    await requirePermission('shop:manage_products');
+    const supabase = await createClient();
+
+    // Verify SKU uniqueness
+    const { data: existingSku } = await supabase
+      .from('products')
+      .select('id')
+      .eq('sku', validated.sku)
+      .maybeSingle();
+
+    if (existingSku) {
+      throw new AppError(`A product with SKU "${validated.sku}" already exists.`, 'CONFLICT', 409);
+    }
+
+    const { data: product, error: prodError } = await supabase
+      .from('products')
+      .insert({
+        sku: validated.sku,
+        name: validated.name,
+        description: validated.description || null,
+        category_id: validated.categoryId || null,
+        price: validated.price,
+        low_stock_threshold: validated.lowStockThreshold,
+        image_url: validated.imageUrl || null,
+        is_active: validated.isActive,
+      })
+      .select('id')
+      .single();
+
+    if (prodError) throw prodError;
+
+    // Initialize inventory record
+    if (validated.initialStock > 0) {
+      const { error: stockError } = await supabase.rpc('adjust_inventory', {
+        p_product_id: product.id,
+        p_quantity_change: validated.initialStock,
+        p_tx_type: 'PURCHASE_RECEIPT',
+        p_notes: 'Initial inventory on product creation',
+      });
+      if (stockError) throw stockError;
+    } else {
+      await supabase.from('inventory').insert({
+        product_id: product.id,
+        quantity_on_hand: 0,
+      });
+    }
+
+    revalidatePath('/dashboard/shop');
+    revalidatePath('/dashboard/inventory');
+    revalidatePath('/shop');
+
+    return {
+      success: true,
+      data: { productId: product.id },
+      message: `Product "${validated.name}" created successfully.`,
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+/**
+ * Edits an existing catalog product
+ */
+export async function updateProductAction(
+  input: ProductUpdateInput
+): Promise<ActionResult<{ productId: string }>> {
+  try {
+    const validated = productUpdateSchema.parse(input);
+    await requirePermission('shop:manage_products');
+    const supabase = await createClient();
+
+    const { error } = await supabase
+      .from('products')
+      .update({
+        category_id: validated.categoryId || null,
+        name: validated.name,
+        description: validated.description || null,
+        price: validated.price,
+        low_stock_threshold: validated.lowStockThreshold,
+        image_url: validated.imageUrl || null,
+        is_active: validated.isActive,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', validated.id);
+
+    if (error) throw error;
+
+    revalidatePath('/dashboard/shop');
+    revalidatePath('/dashboard/inventory');
+    revalidatePath('/shop');
+
+    return {
+      success: true,
+      data: { productId: validated.id },
+      message: 'Product details updated successfully.',
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+/**
+ * Toggles product active/deactivated status
+ */
+export async function toggleProductActiveAction(
+  input: ProductToggleActiveInput
+): Promise<ActionResult<{ productId: string; isActive: boolean }>> {
+  try {
+    const validated = productToggleActiveSchema.parse(input);
+    await requirePermission('shop:manage_products');
+    const supabase = await createClient();
+
+    const { error } = await supabase
+      .from('products')
+      .update({
+        is_active: validated.isActive,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', validated.id);
+
+    if (error) throw error;
+
+    revalidatePath('/dashboard/shop');
+    revalidatePath('/dashboard/inventory');
+    revalidatePath('/shop');
+
+    return {
+      success: true,
+      data: { productId: validated.id, isActive: validated.isActive },
+      message: `Product ${validated.isActive ? 'activated' : 'deactivated'} successfully.`,
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+/**
+ * Creates a product category
+ */
+export async function createProductCategoryAction(
+  input: ProductCategoryCreateInput
+): Promise<ActionResult<{ categoryId: string }>> {
+  try {
+    const validated = productCategoryCreateSchema.parse(input);
+    await requirePermission('shop:manage_products');
+    const supabase = await createClient();
+
+    const { data: category, error } = await supabase
+      .from('product_categories')
+      .insert({
+        name: validated.name,
+        description: validated.description || null,
+      })
+      .select('id')
+      .single();
+
+    if (error) throw error;
+
+    revalidatePath('/dashboard/shop');
+    revalidatePath('/shop');
+
+    return {
+      success: true,
+      data: { categoryId: category.id },
+      message: `Category "${validated.name}" created.`,
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+/**
+ * Manual stock adjustment with traceable audit transaction
+ */
+export async function adjustInventoryAction(
+  input: InventoryAdjustmentInput
+): Promise<ActionResult<{ newQuantity: number }>> {
+  try {
+    const validated = inventoryAdjustmentSchema.parse(input);
+    await requirePermission('inventory:manage');
+    const supabase = await createClient();
+
+    const { data, error } = await supabase.rpc('adjust_inventory', {
+      p_product_id: validated.productId,
+      p_quantity_change: validated.changeQuantity,
+      p_tx_type: validated.transactionType as InventoryTransactionType,
+      p_notes: validated.notes || null,
+    });
+
+    if (error) throw error;
+
+    revalidatePath('/dashboard/inventory');
+    revalidatePath('/dashboard/shop');
+    revalidatePath('/shop');
+
+    return {
+      success: true,
+      data: { newQuantity: Number(data) },
+      message: `Stock updated successfully (new level: ${data}).`,
     };
   } catch (err) {
     return handleActionError(err);

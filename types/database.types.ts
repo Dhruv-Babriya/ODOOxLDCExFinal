@@ -111,6 +111,7 @@ export type Database = {
           id: string
           kitchen_status: Database["public"]["Enums"]["app_kitchen_status"]
           member_id: string | null
+          notes: string | null
           order_number: string
           order_status: Database["public"]["Enums"]["app_order_status"]
           subtotal: number
@@ -126,6 +127,7 @@ export type Database = {
           id?: string
           kitchen_status?: Database["public"]["Enums"]["app_kitchen_status"]
           member_id?: string | null
+          notes?: string | null
           order_number: string
           order_status?: Database["public"]["Enums"]["app_order_status"]
           subtotal?: number
@@ -141,6 +143,7 @@ export type Database = {
           id?: string
           kitchen_status?: Database["public"]["Enums"]["app_kitchen_status"]
           member_id?: string | null
+          notes?: string | null
           order_number?: string
           order_status?: Database["public"]["Enums"]["app_order_status"]
           subtotal?: number
@@ -358,29 +361,41 @@ export type Database = {
       customer_tabs: {
         Row: {
           closed_at: string | null
+          credit_limit: number
+          guest_name: string | null
           id: string
           member_id: string | null
+          notes: string | null
           opened_at: string
           opened_by: string | null
           status: Database["public"]["Enums"]["app_tab_status"]
+          tab_number: string | null
           table_id: string | null
         }
         Insert: {
           closed_at?: string | null
+          credit_limit?: number
+          guest_name?: string | null
           id?: string
           member_id?: string | null
+          notes?: string | null
           opened_at?: string
           opened_by?: string | null
           status?: Database["public"]["Enums"]["app_tab_status"]
+          tab_number?: string | null
           table_id?: string | null
         }
         Update: {
           closed_at?: string | null
+          credit_limit?: number
+          guest_name?: string | null
           id?: string
           member_id?: string | null
+          notes?: string | null
           opened_at?: string
           opened_by?: string | null
           status?: Database["public"]["Enums"]["app_tab_status"]
+          tab_number?: string | null
           table_id?: string | null
         }
         Relationships: [
@@ -1257,9 +1272,15 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          customer_email: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          delivery_address: string | null
           discount_amount: number
+          fulfillment_type: string
           id: string
           member_id: string | null
+          notes: string | null
           order_channel: Database["public"]["Enums"]["app_order_channel"]
           order_number: string
           status: Database["public"]["Enums"]["app_order_status"]
@@ -1270,9 +1291,15 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          delivery_address?: string | null
           discount_amount?: number
+          fulfillment_type?: string
           id?: string
           member_id?: string | null
+          notes?: string | null
           order_channel?: Database["public"]["Enums"]["app_order_channel"]
           order_number: string
           status?: Database["public"]["Enums"]["app_order_status"]
@@ -1283,9 +1310,15 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          delivery_address?: string | null
           discount_amount?: number
+          fulfillment_type?: string
           id?: string
           member_id?: string | null
+          notes?: string | null
           order_channel?: Database["public"]["Enums"]["app_order_channel"]
           order_number?: string
           status?: Database["public"]["Enums"]["app_order_status"]
@@ -1422,6 +1455,29 @@ export type Database = {
           p_start_time: string
         }
         Returns: string
+      }
+      adjust_inventory: {
+        Args: {
+          p_notes?: string | null
+          p_product_id: string
+          p_quantity_change: number
+          p_reference_id?: string | null
+          p_tx_type: Database["public"]["Enums"]["app_inventory_transaction_type"]
+        }
+        Returns: number
+      }
+      cancel_shop_order: {
+        Args: {
+          p_order_id: string
+          p_reason?: string | null
+        }
+        Returns: undefined
+      }
+      close_customer_tab: {
+        Args: {
+          p_tab_id: string
+        }
+        Returns: number
       }
       deduct_inventory: {
         Args: {

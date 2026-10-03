@@ -1,27 +1,83 @@
 import { DashboardModuleShell } from '@/components/dashboard/module-shell';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { createClient } from '@/lib/supabase/server';
-import { formatCurrency, formatDateTime } from '@/lib/utils';
-import { ShoppingBag } from 'lucide-react';
+import { ShopPageClient } from '@/components/dashboard/shop/ShopPageClient';
+
+export const revalidate = 0; // Fresh dashboard metrics
 
 export default async function ShopOrdersDashboardPage() {
   const supabase = await createClient();
-  const { data: orders } = await supabase
-    .from('shop_orders')
-    .select(`
-      id,
-      order_number,
-      order_channel,
-      status,
-      subtotal,
-      discount_amount,
-      total_amount,
-      created_at,
-      members (profiles (full_name))
-    `)
-    .order('created_at', { ascending: false })
-    .limit(10);
+
+  const [
+    { data: orders },
+    { data: products },
+    { data: categories },
+    { data: members },
+  ] = await Promise.all([
+    supabase
+      .from('shop_orders')
+      .select(`
+        id,
+        order_number,
+        member_id,
+        order_channel,
+        fulfillment_type,
+        delivery_address,
+        customer_name,
+        customer_phone,
+        customer_email,
+        notes,
+        status,
+        subtotal,
+        discount_amount,
+        total_amount,
+        created_at,
+        members (
+          membership_number,
+          profiles (full_name, email, phone),
+          membership_plans (tier, shop_discount_percent)
+        ),
+        shop_order_items (
+          id,
+          product_id,
+          quantity,
+          unit_price,
+          total_price,
+          products (name, sku)
+        )
+      `)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('products')
+      .select(`
+        id,
+        sku,
+        name,
+        description,
+        price,
+        low_stock_threshold,
+        is_active,
+        image_url,
+        category_id,
+        product_categories (name),
+        inventory (quantity_on_hand)
+      `)
+      .order('name'),
+    supabase
+      .from('product_categories')
+      .select('id, name')
+      .order('name'),
+    supabase
+      .from('members')
+      .select(`
+        id,
+        membership_number,
+        status,
+        profiles (full_name, email, phone),
+        membership_plans (tier, shop_discount_percent)
+      `)
+      .eq('status', 'ACTIVE')
+      .order('membership_number'),
+  ]);
 
   return (
     <DashboardModuleShell
@@ -32,65 +88,18 @@ export default async function ShopOrdersDashboardPage() {
       tables={['shop_orders', 'shop_order_items', 'products', 'inventory']}
       contracts={['ShopOrder', 'OrderStatus', 'OrderChannel', 'shopOrderCreateSchema']}
       phase1Roadmap={[
-        'Fast Point-of-Sale (POS) counter interface for front desk & shop staff with barcode/SKU scanner',
-        'Online checkout flow for members with automatic plan discount deduction',
-        'Atomic stock decrementing via deduct_inventory stored procedure',
-        'Thermal receipt / invoice PDF print integration',
+        'Fast Point-of-Sale (POS) counter interface for front desk & shop staff with quick SKU/item search',
+        'Pickup & Delivery fulfillment workflows for home orders with address validation',
+        'Atomic stock decrementing and concurrency protection via database stored procedures',
+        'Automatic server-side member tier discount calculation (Gold 15%, Silver 10%, Junior 5%)',
       ]}
     >
-      <Card className="border-zinc-800 bg-zinc-900/50">
-        <CardHeader className="flex flex-row items-center justify-between pb-3">
-          <div>
-            <CardTitle className="text-base text-white">Recent Shop Orders</CardTitle>
-            <p className="text-xs text-zinc-400">Queried from public.shop_orders</p>
-          </div>
-          <Badge variant="outline">{orders?.length || 0} Orders</Badge>
-        </CardHeader>
-        <CardContent>
-          {orders && orders.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
-                <thead className="border-b border-zinc-800 text-zinc-400 font-semibold uppercase tracking-wider">
-                  <tr>
-                    <th className="py-2.5 px-3">Order #</th>
-                    <th className="py-2.5 px-3">Customer</th>
-                    <th className="py-2.5 px-3">Channel</th>
-                    <th className="py-2.5 px-3">Status</th>
-                    <th className="py-2.5 px-3">Total Amount</th>
-                    <th className="py-2.5 px-3">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800/60 font-mono">
-                  {orders.map((o) => (
-                    <tr key={o.id} className="hover:bg-zinc-800/30">
-                      <td className="py-2 px-3 text-emerald-400">{o.order_number}</td>
-                      <td className="py-2 px-3 font-sans text-zinc-200">{o.members?.profiles?.full_name || 'Walk-in'}</td>
-                      <td className="py-2 px-3 font-sans">
-                        <Badge variant="outline" className="text-[10px]">
-                          {o.order_channel}
-                        </Badge>
-                      </td>
-                      <td className="py-2 px-3">
-                        <Badge variant={o.status === 'COMPLETED' ? 'success' : 'default'} className="text-[10px]">
-                          {o.status}
-                        </Badge>
-                      </td>
-                      <td className="py-2 px-3 text-white font-semibold">{formatCurrency(o.total_amount)}</td>
-                      <td className="py-2 px-3 text-zinc-400">{formatDateTime(o.created_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="text-center py-10 space-y-2 text-zinc-400 text-xs">
-              <ShoppingBag className="h-8 w-8 text-zinc-600 mx-auto" />
-              <p>No shop orders recorded yet. Developer 3 will implement the POS terminal in Phase 1.</p>
-              <p className="font-mono text-zinc-500">Atomic server action (createShopOrderAction) ready in actions/shop.ts</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <ShopPageClient
+        initialOrders={(orders || []) as unknown as React.ComponentProps<typeof ShopPageClient>['initialOrders']}
+        initialProducts={(products || []) as unknown as React.ComponentProps<typeof ShopPageClient>['initialProducts']}
+        categories={categories || []}
+        members={(members || []) as unknown as React.ComponentProps<typeof ShopPageClient>['members']}
+      />
     </DashboardModuleShell>
   );
 }
