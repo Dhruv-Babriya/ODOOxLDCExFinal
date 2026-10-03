@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Home, ShieldAlert } from 'lucide-react';
+import { sanitizeErrorMessage } from '@/lib/errors';
 
 export default function MemberPortalError({
   error,
@@ -14,8 +15,10 @@ export default function MemberPortalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('[Member Portal Error Caught]:', error);
+    console.error('[Member Portal Error Boundary Caught]:', error);
   }, [error]);
+
+  const safeMessage = sanitizeErrorMessage(error?.message);
 
   return (
     <div className="max-w-xl mx-auto py-12 px-4">
@@ -25,15 +28,15 @@ export default function MemberPortalError({
             <ShieldAlert className="h-8 w-8" />
           </div>
           <CardTitle className="text-xl font-bold text-white tracking-tight">
-            Unable to Load Member Portal
+            Member Portal Notice
           </CardTitle>
           <CardDescription className="text-xs text-zinc-400">
             We encountered a temporary issue retrieving your membership data or records.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5 pt-1">
-          <div className="p-3 rounded-lg bg-zinc-950/60 border border-zinc-800 text-xs text-zinc-400 text-left font-mono">
-            {error.message || 'An unexpected server error occurred.'}
+          <div className="p-3 rounded-lg bg-zinc-950/60 border border-zinc-800 text-xs text-zinc-300 text-left">
+            {safeMessage}
           </div>
 
           <div className="flex items-center justify-center gap-3">

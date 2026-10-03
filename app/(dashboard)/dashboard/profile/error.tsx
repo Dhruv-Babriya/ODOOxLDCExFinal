@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, RefreshCw, Home } from 'lucide-react';
+import { sanitizeErrorMessage } from '@/lib/errors';
 
 export default function ProfileError({
   error,
@@ -14,8 +15,10 @@ export default function ProfileError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('[Profile Error Caught]:', error);
+    console.error('[Profile Error Boundary Caught]:', error);
   }, [error]);
+
+  const safeMessage = sanitizeErrorMessage(error?.message);
 
   return (
     <div className="max-w-md mx-auto py-12 px-4">
@@ -25,15 +28,15 @@ export default function ProfileError({
             <AlertCircle className="h-6 w-6" />
           </div>
           <CardTitle className="text-lg font-bold text-white tracking-tight">
-            Profile Loading Error
+            Profile Loading Notice
           </CardTitle>
           <CardDescription className="text-xs text-zinc-400">
             We could not load your user profile details.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 pt-1">
-          <div className="p-3 rounded-lg bg-zinc-950/60 border border-zinc-800 text-xs text-zinc-400 text-left font-mono">
-            {error.message || 'An unexpected error occurred.'}
+          <div className="p-3 rounded-lg bg-zinc-950/60 border border-zinc-800 text-xs text-zinc-300 text-left">
+            {safeMessage}
           </div>
 
           <div className="flex items-center justify-center gap-3">
