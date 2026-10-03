@@ -3,9 +3,11 @@
 import { createClient } from '@/lib/supabase/server';
 import {
   staffCreateSchema,
+  staffOnboardSchema,
   staffShiftSchema,
   leaveRequestSchema,
   type StaffCreateInput,
+  type StaffOnboardInput,
   type StaffShiftInput,
   type LeaveRequestInput,
 } from '@/lib/validations/staff';
@@ -17,8 +19,63 @@ import { revalidatePath } from 'next/cache';
 import type { StaffMember, StaffShift, StaffLeave } from '@/components/dashboard/staff/StaffDashboardClient';
 
 // ---------------------------------------------------------------------------
-// Staff CRUD
+// Staff CRUD & Manager Provisioning
 // ---------------------------------------------------------------------------
+
+/**
+ * Onboard a new staff member (Manager / Owner account only).
+ * Provisions the user credentials, sets role (FRONT_DESK, SHOP_STAFF, BAR_STAFF, ADMIN),
+ * and creates the employee record in public.staff.
+ */
+export async function onboardStaffAction(
+  input: StaffOnboardInput
+): Promise<ActionResult<{ staffId: string; profileId: string; email: string }>> {
+  try {
+    await requirePermission('staff:manage');
+    const validated = staffOnboardSchema.parse(input);
+    const supabase = await createClient();
+
+    const rpcClient = supabase.rpc as unknown as (
+      fn: string,
+      args: Record<string, unknown>
+    ) => Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>;
+
+    const { data: result, error: rpcError } = await rpcClient('onboard_staff_direct', {
+      p_email: validated.email,
+      p_password: validated.password,
+      p_full_name: validated.fullName,
+      p_phone: validated.phone || null,
+      p_role: validated.role,
+      p_employee_code: validated.employeeCode,
+      p_department: validated.department,
+      p_position: validated.position,
+      p_hourly_rate: validated.hourlyRate,
+      p_salary_monthly: validated.salaryMonthly,
+      p_hire_date: validated.hireDate,
+    });
+
+    if (rpcError) {
+      return {
+        success: false,
+        error: rpcError.message,
+        code: 'STAFF_ONBOARD_FAILED',
+      };
+    }
+
+    revalidatePath('/dashboard/staff');
+    return {
+      success: true,
+      data: {
+        staffId: (result?.staff_id as string) || '',
+        profileId: (result?.profile_id as string) || '',
+        email: validated.email,
+      },
+      message: `Staff member ${validated.fullName} (${validated.role}) onboarded successfully!`,
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
 
 /**
  * Create a new staff record linked to an existing user profile

@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { signUpAction } from '@/actions/auth';
-import { UserPlus, Eye, EyeOff, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
+import { UserPlus, Eye, EyeOff, CheckCircle2, AlertCircle, Sparkles, ShieldCheck } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -49,16 +50,28 @@ export default function RegisterPage() {
 
   return (
     <Card className="border-zinc-800 bg-zinc-900/80 shadow-2xl backdrop-blur-md">
-      <CardHeader className="space-y-1">
-        <div className="flex items-center gap-2">
-          <div className="p-1 rounded-md bg-emerald-500/10 text-emerald-400">
-            <Sparkles className="h-4 w-4" />
+      <CardHeader className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <CardTitle className="text-xl text-white font-bold tracking-tight">Member Registration</CardTitle>
           </div>
-          <CardTitle className="text-xl text-white font-bold tracking-tight">Create Member Account</CardTitle>
+          <Badge variant="outline" className="text-[10px] font-semibold text-emerald-400 border-emerald-500/30 bg-emerald-950/40">
+            Members Only
+          </Badge>
         </div>
         <CardDescription className="text-xs text-zinc-400">
-          Join The Champions Club to access court bookings, coaching, and member privileges
+          Join The Champions Club as a member to book courts, enroll in coaching, and access member privileges.
         </CardDescription>
+
+        <div className="p-2.5 rounded-lg bg-zinc-950/80 border border-zinc-800/80 text-[11px] text-zinc-400 flex items-start gap-2.5">
+          <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5" />
+          <span>
+            <strong className="text-zinc-200">New Member Portal:</strong> Self-registration strictly provisions club member accounts. Club staff, coaches, and administrators are provisioned directly by Manager accounts.
+          </span>
+        </div>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
@@ -176,18 +189,23 @@ export default function RegisterPage() {
             aria-busy={isLoading}
           >
             <UserPlus className="h-4 w-4" />
-            <span>Create Member Account</span>
+            <span>Register as Member</span>
           </Button>
         </form>
       </CardContent>
-      <CardFooter className="flex justify-center border-t border-zinc-800/80 pt-4 text-xs text-zinc-400">
-        <span>Already have an account?</span>
-        <Link
-          href="/login"
-          className="ml-1.5 text-emerald-400 hover:text-emerald-300 font-medium underline-offset-4 hover:underline"
-        >
-          Sign In
-        </Link>
+      <CardFooter className="flex flex-col items-center gap-2 border-t border-zinc-800/80 pt-4 text-xs text-zinc-400">
+        <div className="flex items-center">
+          <span>Already have an account?</span>
+          <Link
+            href="/login"
+            className="ml-1.5 text-emerald-400 hover:text-emerald-300 font-medium underline-offset-4 hover:underline"
+          >
+            Sign In
+          </Link>
+        </div>
+        <p className="text-[11px] text-zinc-500 text-center">
+          Club Staff, Coaches & Bartenders: Sign in with your manager-provisioned account.
+        </p>
       </CardFooter>
     </Card>
   );

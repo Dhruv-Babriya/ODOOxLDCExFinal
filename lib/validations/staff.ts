@@ -14,6 +14,23 @@ export const staffCreateSchema = z.object({
 
 export type StaffCreateInput = z.infer<typeof staffCreateSchema>;
 
+export const staffOnboardSchema = z.object({
+  fullName: z.string().trim().min(2, 'Full name must be at least 2 characters'),
+  email: z.string().trim().email('Invalid email address'),
+  phone: z.string().trim().regex(/^[0-9+ -]{10,15}$/, 'Invalid phone number').optional().or(z.literal('')),
+  password: z.string().min(6, 'Initial login password must be at least 6 characters'),
+  role: z.enum(['FRONT_DESK', 'SHOP_STAFF', 'BAR_STAFF', 'ADMIN'] as const),
+  department: z.enum(DEPARTMENTS as [string, ...string[]]),
+  position: z.string().trim().min(2, 'Position title required'),
+  employeeCode: z.string().trim().min(2, 'Employee code required'),
+  hourlyRate: z.coerce.number().min(0).default(0),
+  salaryMonthly: z.coerce.number().min(0).default(0),
+  hireDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Hire date must be YYYY-MM-DD'),
+  isActive: z.boolean().default(true),
+});
+
+export type StaffOnboardInput = z.infer<typeof staffOnboardSchema>;
+
 export const staffShiftSchema = z.object({
   staffId: z.string().uuid('Invalid staff ID'),
   shiftDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Shift date must be YYYY-MM-DD'),

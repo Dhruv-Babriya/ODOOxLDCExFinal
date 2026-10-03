@@ -12,7 +12,8 @@ export const registerSchema = z.object({
   email: z.string().trim().email('Invalid email address'),
   phone: z.string().trim().regex(/^[0-9+ -]{10,15}$/, 'Invalid phone number').optional().or(z.literal('')),
   password: z.string().min(6, 'Password must be at least 6 characters'),
-  role: z.enum(['OWNER', 'ADMIN', 'FRONT_DESK', 'SHOP_STAFF', 'BAR_STAFF', 'MEMBER'] as const).optional().default('MEMBER'),
+  // Registration page is exclusively for Club Members. Staff accounts must be provisioned by Managers.
+  role: z.literal('MEMBER').optional().default('MEMBER'),
 });
 
 export type RegisterInput = z.input<typeof registerSchema>;
