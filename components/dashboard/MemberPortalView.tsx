@@ -8,12 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import type { MemberPortalData } from '@/types/shared';
-<<<<<<< HEAD
 import { formatDate, formatCurrency, formatTime } from '@/lib/utils';
-=======
-import { formatDate, formatCurrency } from '@/lib/utils';
 import { renewMembershipAction } from '@/actions/members';
->>>>>>> fdf6696dc65136cca6700d389d83efd15f0b24a9
 import {
   Sparkles,
   Calendar,

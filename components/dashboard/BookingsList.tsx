@@ -17,10 +17,6 @@ import {
   updateBookingStatusAction,
 } from '@/actions/bookings';
 import {
-<<<<<<< HEAD
-  CalendarDays,
-=======
->>>>>>> fdf6696dc65136cca6700d389d83efd15f0b24a9
   Filter,
   XCircle,
   Eye,
@@ -103,11 +99,7 @@ export function BookingsList({ initialBookings, courts, userRole }: BookingsList
   // Details & Participant Modal State
   const [nowMs] = useState(() => Date.now());
   const [detailBooking, setDetailBooking] = useState<{
-<<<<<<< HEAD
-    booking: BookingItem;
-=======
     booking: BookingDetailInfo;
->>>>>>> fdf6696dc65136cca6700d389d83efd15f0b24a9
     participants: Array<{ id: string; memberId: string | null; memberName: string | null; guestName: string | null }>;
   } | null>(null);
   const [addParticipantGuestName, setAddParticipantGuestName] = useState('');
@@ -122,7 +114,6 @@ export function BookingsList({ initialBookings, courts, userRole }: BookingsList
   const [newCourtId, setNewCourtId] = useState('');
   const [newDate, setNewDate] = useState('');
   const [newTime, setNewTime] = useState('10:00');
-  const [currentTime] = useState(() => Date.now());
 
   const isStaff = ['OWNER', 'ADMIN', 'FRONT_DESK'].includes(userRole);
 
@@ -430,11 +421,7 @@ export function BookingsList({ initialBookings, courts, userRole }: BookingsList
                 ) : (
                   bookings.map((booking) => {
                     const canManageBooking = isStaff || booking.isMine;
-<<<<<<< HEAD
                     const isUpcoming = new Date(booking.startTime).getTime() > nowMs;
-=======
-                    const isUpcoming = new Date(booking.startTime).getTime() > currentTime;
->>>>>>> fdf6696dc65136cca6700d389d83efd15f0b24a9
                     const isConfirmed = booking.status === 'CONFIRMED';
 
                     return (

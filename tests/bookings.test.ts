@@ -18,6 +18,7 @@ import {
   bookingCancellationSchema,
   addParticipantSchema,
   courtCreateSchema,
+  courtUpdateSchema,
 } from '../lib/validations/booking';
 
 import { calculateCourtPrice } from '../lib/pricing';
@@ -88,7 +89,7 @@ test('Reject invalid sport type', () => {
 
 test('Valid court update', () => {
   const result = courtUpdateSchema.safeParse({
-    id: '22222222-2222-2222-2222-222222222201',
+    id: '22222222-2222-4222-8222-222222222201',
     hourlyRate: 750,
   });
   assert(result.success, 'Should accept valid court update');

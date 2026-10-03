@@ -527,8 +527,13 @@ export async function rescheduleBookingAction(
         .eq('id', booking.member_id)
         .single();
 
-<<<<<<< HEAD
-      if (member && member.status !== 'ACTIVE') {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const isMemberActive =
+        member &&
+        member.status === 'ACTIVE' &&
+        (!member.end_date || member.end_date >= todayStr);
+
+      if (member && !isMemberActive) {
         throw new AppError(
           'Membership is not active. Suspended or expired members cannot reschedule court bookings.',
           'MEMBERSHIP_INACTIVE',
@@ -536,16 +541,7 @@ export async function rescheduleBookingAction(
         );
       }
 
-      if (member && member.status === 'ACTIVE' && member.membership_plans) {
-=======
-      const todayStr = new Date().toISOString().split('T')[0];
-      const isMemberActive =
-        member &&
-        member.status === 'ACTIVE' &&
-        (!member.end_date || member.end_date >= todayStr);
-
       if (isMemberActive && member.membership_plans) {
->>>>>>> fdf6696dc65136cca6700d389d83efd15f0b24a9
         const plan = member.membership_plans as {
           tier: string;
           court_discount_percent: number;

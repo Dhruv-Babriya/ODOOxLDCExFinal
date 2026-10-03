@@ -52,12 +52,7 @@ export class BookingConcurrencyError extends ConflictError {
  * Transforms any unknown error into a sanitized, safe ActionResult for server actions
  */
 export function handleActionError(error: unknown): ActionResult<never> {
-  // Re-throw Next.js dynamic server usage error so Next.js handles route dynamism correctly
-<<<<<<< HEAD
-  if (typeof error === 'object' && error !== null && 'digest' in error && (error as { digest?: string }).digest === 'DYNAMIC_SERVER_USAGE') {
-=======
   if (typeof error === 'object' && error !== null && 'digest' in error && (error as { digest?: unknown }).digest === 'DYNAMIC_SERVER_USAGE') {
->>>>>>> fdf6696dc65136cca6700d389d83efd15f0b24a9
     throw error;
   }
 
