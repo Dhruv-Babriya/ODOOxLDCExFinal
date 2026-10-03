@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useRef, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -92,6 +92,18 @@ export function BookingsList({ initialBookings, courts, userRole }: BookingsList
   const [success, setSuccess] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  // Double-submit guard
+  const submittingRef = useRef(false);
+
+  // Auto-dismiss success messages after 6s
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showSuccess = useCallback((msg: string) => {
+    if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    setSuccess(msg);
+    successTimerRef.current = setTimeout(() => setSuccess(null), 6000);
+  }, []);
+  useEffect(() => { return () => { if (successTimerRef.current) clearTimeout(successTimerRef.current); }; }, []);
+
   // Cancellation Modal State
   const [cancelBookingId, setCancelBookingId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
@@ -134,23 +146,28 @@ export function BookingsList({ initialBookings, courts, userRole }: BookingsList
   };
 
   const handleCancelBooking = () => {
-    if (!cancelBookingId || cancelReason.trim().length < 3) return;
+    if (!cancelBookingId || cancelReason.trim().length < 3 || submittingRef.current) return;
+    submittingRef.current = true;
     setError(null);
     setSuccess(null);
 
     startTransition(async () => {
-      const result = await cancelBookingAction({
-        bookingId: cancelBookingId,
-        cancellationReason: cancelReason,
-      });
+      try {
+        const result = await cancelBookingAction({
+          bookingId: cancelBookingId,
+          cancellationReason: cancelReason,
+        });
 
-      if (result.success) {
-        setSuccess('Booking cancelled successfully.');
-        setCancelBookingId(null);
-        setCancelReason('');
-        handleFilter();
-      } else {
-        setError(result.error);
+        if (result.success) {
+          showSuccess('Booking cancelled successfully. Quota restored.');
+          setCancelBookingId(null);
+          setCancelReason('');
+          handleFilter();
+        } else {
+          setError(result.error);
+        }
+      } finally {
+        submittingRef.current = false;
       }
     });
   };
@@ -218,25 +235,30 @@ export function BookingsList({ initialBookings, courts, userRole }: BookingsList
   };
 
   const handleRecordPayment = () => {
-    if (!paymentBooking) return;
+    if (!paymentBooking || submittingRef.current) return;
+    submittingRef.current = true;
     setError(null);
     setSuccess(null);
 
     startTransition(async () => {
-      const result = await recordBookingPaymentAction({
-        bookingId: paymentBooking.id,
-        amount: paymentBooking.finalPrice > 0 ? paymentBooking.finalPrice : 0.01,
-        paymentMethod,
-        transactionReference: paymentTxnRef || undefined,
-      });
+      try {
+        const result = await recordBookingPaymentAction({
+          bookingId: paymentBooking.id,
+          amount: paymentBooking.finalPrice > 0 ? paymentBooking.finalPrice : 0.01,
+          paymentMethod,
+          transactionReference: paymentTxnRef || undefined,
+        });
 
-      if (result.success) {
-        setSuccess(result.message || 'Payment recorded successfully!');
-        setPaymentBooking(null);
-        setPaymentTxnRef('');
-        handleFilter();
-      } else {
-        setError(result.error);
+        if (result.success) {
+          showSuccess(result.message || 'Payment recorded successfully!');
+          setPaymentBooking(null);
+          setPaymentTxnRef('');
+          handleFilter();
+        } else {
+          setError(result.error);
+        }
+      } finally {
+        submittingRef.current = false;
       }
     });
   };
@@ -254,7 +276,8 @@ export function BookingsList({ initialBookings, courts, userRole }: BookingsList
   };
 
   const handleRescheduleSubmit = () => {
-    if (!rescheduleBooking || !newCourtId || !newDate || !newTime) return;
+    if (!rescheduleBooking || !newCourtId || !newDate || !newTime || submittingRef.current) return;
+    submittingRef.current = true;
     setError(null);
     setSuccess(null);
 
@@ -262,19 +285,23 @@ export function BookingsList({ initialBookings, courts, userRole }: BookingsList
     const endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000);
 
     startTransition(async () => {
-      const result = await rescheduleBookingAction({
-        bookingId: rescheduleBooking.id,
-        newCourtId,
-        newStartTime: startDateTime.toISOString(),
-        newEndTime: endDateTime.toISOString(),
-      });
+      try {
+        const result = await rescheduleBookingAction({
+          bookingId: rescheduleBooking.id,
+          newCourtId,
+          newStartTime: startDateTime.toISOString(),
+          newEndTime: endDateTime.toISOString(),
+        });
 
-      if (result.success) {
-        setSuccess('Booking rescheduled successfully!');
-        setRescheduleBooking(null);
-        handleFilter();
-      } else {
-        setError(result.error);
+        if (result.success) {
+          showSuccess('Booking rescheduled successfully!');
+          setRescheduleBooking(null);
+          handleFilter();
+        } else {
+          setError(result.error);
+        }
+      } finally {
+        submittingRef.current = false;
       }
     });
   };
@@ -556,7 +583,7 @@ export function BookingsList({ initialBookings, courts, userRole }: BookingsList
 
       {/* Details & Social Play Participant Modal */}
       {detailBooking && (
-        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Booking details" onKeyDown={(e) => e.key === 'Escape' && setDetailBooking(null)}>
           <Card className="w-full max-w-lg border-zinc-700 bg-zinc-900 shadow-2xl">
             <CardHeader className="pb-3 border-b border-zinc-800 flex flex-row items-center justify-between">
               <CardTitle className="text-sm text-white flex items-center gap-2">
@@ -656,7 +683,7 @@ export function BookingsList({ initialBookings, courts, userRole }: BookingsList
 
       {/* Reschedule Modal */}
       {rescheduleBooking && (
-        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Reschedule booking" onKeyDown={(e) => e.key === 'Escape' && setRescheduleBooking(null)}>
           <Card className="w-full max-w-md border-amber-600/40 bg-zinc-900 shadow-2xl">
             <CardHeader className="pb-3 border-b border-zinc-800">
               <CardTitle className="text-sm text-amber-300 flex items-center gap-2">
@@ -729,7 +756,7 @@ export function BookingsList({ initialBookings, courts, userRole }: BookingsList
 
       {/* Record Payment Modal */}
       {paymentBooking && (
-        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Record payment" onKeyDown={(e) => e.key === 'Escape' && setPaymentBooking(null)}>
           <Card className="w-full max-w-md border-emerald-600/40 bg-zinc-900 shadow-2xl">
             <CardHeader className="pb-3 border-b border-zinc-800">
               <CardTitle className="text-sm text-emerald-300 flex items-center gap-2">
@@ -794,7 +821,7 @@ export function BookingsList({ initialBookings, courts, userRole }: BookingsList
 
       {/* Cancellation Modal */}
       {cancelBookingId && (
-        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Cancel booking" onKeyDown={(e) => e.key === 'Escape' && (setCancelBookingId(null), setCancelReason(''))}>
           <Card className="w-full max-w-md border-rose-600/40 bg-zinc-900 shadow-2xl">
             <CardHeader className="pb-3 border-b border-zinc-800">
               <CardTitle className="text-sm text-rose-300 flex items-center gap-2">

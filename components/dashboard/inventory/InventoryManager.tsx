@@ -182,7 +182,7 @@ export function InventoryManager({ products: initialProducts, transactions: init
 
       const targetProd = products.find((p) => p.id === productId);
       const newTx: InventoryTransaction = {
-        id: Math.random().toString(),
+        id: `tx-${productId}-${newQty}`,
         product_id: productId,
         change_quantity: quantityToAdd,
         transaction_type: 'PURCHASE_RECEIPT',

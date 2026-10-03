@@ -281,7 +281,7 @@ async function runTestSuite() {
 
   await test('Concurrency Protection: Simultaneous conflicting booking on same court and time is rejected by GIST exclusion constraint', async () => {
     // Attempt to book the EXACT SAME court, date, and time
-    const { data, error } = await supabase.rpc('create_court_booking', {
+    const { error } = await supabase.rpc('create_court_booking', {
       p_court_id: testCourtId,
       p_member_id: null,
       p_booking_type: 'STANDARD',
@@ -302,7 +302,7 @@ async function runTestSuite() {
     const overlapStart = `${testDate}T10:30:00Z`;
     const overlapEnd = `${testDate}T11:30:00Z`;
 
-    const { data, error } = await supabase.rpc('create_court_booking', {
+    const { error } = await supabase.rpc('create_court_booking', {
       p_court_id: testCourtId,
       p_member_id: null,
       p_booking_type: 'STANDARD',
@@ -405,7 +405,7 @@ async function runTestSuite() {
   });
 
   await test('Member attempts session 3 for the same day: REJECTED by daily limit rule', async () => {
-    const { data, error } = await supabase.rpc('create_court_booking', {
+    const { error } = await supabase.rpc('create_court_booking', {
       p_court_id: testCourtId,
       p_member_id: testMemberId,
       p_booking_type: 'STANDARD',

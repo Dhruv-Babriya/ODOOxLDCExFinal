@@ -62,15 +62,18 @@ function assert(condition, message) {
   }
 }
 
-// Helpers to generate test dates safely in UTC
+// Helpers to generate test dates safely in UTC with run-specific offset to avoid collisions
+const testRunOffset = 70 + Math.floor(Math.random() * 350);
+
 function getFutureDate(daysAhead) {
   const d = new Date();
-  d.setUTCDate(d.getUTCDate() + daysAhead);
+  d.setUTCDate(d.getUTCDate() + testRunOffset + daysAhead);
   return d.toISOString().split('T')[0];
 }
 
 function getNextFriday() {
   const d = new Date();
+  d.setUTCDate(d.getUTCDate() + testRunOffset);
   const day = d.getUTCDay();
   const diff = (5 - day + 7) % 7 || 7; // strictly next Friday
   d.setUTCDate(d.getUTCDate() + diff);
@@ -79,6 +82,7 @@ function getNextFriday() {
 
 function getNextMonday() {
   const d = new Date();
+  d.setUTCDate(d.getUTCDate() + testRunOffset);
   const day = d.getUTCDay();
   const diff = (1 - day + 7) % 7 || 7; // strictly next Monday
   d.setUTCDate(d.getUTCDate() + diff);

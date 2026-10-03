@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useRef, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -41,6 +41,22 @@ export function MemberBookingsSection({ bookings: initialBookings }: MemberBooki
   const [success, setSuccess] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  // Double-submit guard
+  const submittingRef = useRef(false);
+
+  // Auto-dismiss success timer
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showSuccess = useCallback((msg: string) => {
+    if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    setSuccess(msg);
+    successTimerRef.current = setTimeout(() => setSuccess(null), 6000);
+  }, []);
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    };
+  }, []);
+
   const now = new Date().getTime();
   const upcoming = bookings.filter(
     (b) => new Date(b.startTime).getTime() > now && b.status === 'CONFIRMED'
@@ -50,29 +66,34 @@ export function MemberBookingsSection({ bookings: initialBookings }: MemberBooki
   );
 
   const handleCancel = () => {
-    if (!cancelBookingId || cancelReason.trim().length < 3) return;
+    if (!cancelBookingId || cancelReason.trim().length < 3 || submittingRef.current) return;
+    submittingRef.current = true;
     setError(null);
     setSuccess(null);
 
     startTransition(async () => {
-      const result = await cancelBookingAction({
-        bookingId: cancelBookingId,
-        cancellationReason: cancelReason,
-      });
+      try {
+        const result = await cancelBookingAction({
+          bookingId: cancelBookingId,
+          cancellationReason: cancelReason,
+        });
 
-      if (result.success) {
-        setSuccess('Booking cancelled successfully. Your daily quota is restored.');
-        setBookings((prev) =>
-          prev.map((b) =>
-            b.id === cancelBookingId
-              ? { ...b, status: 'CANCELLED', cancellationReason: cancelReason }
-              : b
-          )
-        );
-        setCancelBookingId(null);
-        setCancelReason('');
-      } else {
-        setError(result.error);
+        if (result.success) {
+          showSuccess('Booking cancelled successfully. Your daily quota is restored.');
+          setBookings((prev) =>
+            prev.map((b) =>
+              b.id === cancelBookingId
+                ? { ...b, status: 'CANCELLED', cancellationReason: cancelReason }
+                : b
+            )
+          );
+          setCancelBookingId(null);
+          setCancelReason('');
+        } else {
+          setError(result.error);
+        }
+      } finally {
+        submittingRef.current = false;
       }
     });
   };
@@ -212,7 +233,13 @@ export function MemberBookingsSection({ bookings: initialBookings }: MemberBooki
 
       {/* Cancel Modal */}
       {cancelBookingId && (
-        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Cancel reservation"
+          onKeyDown={(e) => e.key === 'Escape' && (setCancelBookingId(null), setCancelReason(''))}
+        >
           <Card className="w-full max-w-sm border-rose-600/40 bg-zinc-900 shadow-2xl">
             <CardHeader className="pb-3 border-b border-zinc-800">
               <CardTitle className="text-sm text-rose-300 flex items-center gap-2">
@@ -226,6 +253,7 @@ export function MemberBookingsSection({ bookings: initialBookings }: MemberBooki
               </p>
               <Input
                 placeholder="Reason for cancellation..."
+                aria-label="Reason for cancellation"
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
                 className="text-xs h-8 bg-zinc-950"
