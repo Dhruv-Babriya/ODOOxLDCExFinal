@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { FULFILLMENT_TYPES, ORDER_CHANNELS, ORDER_STATUSES, INVENTORY_TRANSACTION_TYPES } from '@/types/shared';
+import {
+  FULFILLMENT_TYPES,
+  FULFILLMENT_STATUSES,
+  ORDER_CHANNELS,
+  ORDER_STATUSES,
+  INVENTORY_TRANSACTION_TYPES,
+} from '@/types/shared';
 
 export const productCategoryCreateSchema = z.object({
   name: z.string().trim().min(2, 'Category name must be at least 2 characters'),
@@ -98,3 +104,11 @@ export const updateShopOrderStatusSchema = z.object({
 });
 
 export type UpdateShopOrderStatusInput = z.infer<typeof updateShopOrderStatusSchema>;
+
+export const updateShopOrderFulfillmentStatusSchema = z.object({
+  orderId: z.string().uuid('Invalid order ID'),
+  fulfillmentStatus: z.enum(FULFILLMENT_STATUSES as [string, ...string[]]),
+  notes: z.string().trim().optional().nullable(),
+});
+
+export type UpdateShopOrderFulfillmentStatusInput = z.infer<typeof updateShopOrderFulfillmentStatusSchema>;

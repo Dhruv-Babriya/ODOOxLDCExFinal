@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { formatCurrency, formatDateTime } from '@/lib/utils';
 import {
   createBarTableAction,
   updateBarTableStatusAction,
+  releaseBarTableAction,
   createMenuCategoryAction,
   createMenuItemAction,
   toggleMenuItemAvailabilityAction,
@@ -31,6 +32,7 @@ import {
   Receipt,
   Trash2,
   Layers,
+  AlertTriangle,
 } from 'lucide-react';
 
 export interface BarTable {
@@ -149,6 +151,21 @@ export function BarManager({
   const [isAddMenuItemOpen, setIsAddMenuItemOpen] = useState(false);
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
   const [settlingTab, setSettlingTab] = useState<CustomerTab | null>(null);
+  const [unservedWarningTab, setUnservedWarningTab] = useState<{
+    tab: CustomerTab;
+    message: string;
+  } | null>(null);
+
+  const [currentTime, setCurrentTime] = useState<number>(0);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setCurrentTime(Date.now()), 0);
+    const interval = setInterval(() => setCurrentTime(Date.now()), 30000);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
+  }, []);
 
   // Forms
   const [newTableNum, setNewTableNum] = useState('');
@@ -453,11 +470,11 @@ export function BarManager({
   };
 
   // Close Tab
-  const handleConfirmCloseTab = async (tabId: string) => {
+  const handleConfirmCloseTab = async (tabId: string, force = false) => {
     setIsLoading(true);
     setFeedback(null);
 
-    const res = await closeCustomerTabAction({ tabId });
+    const res = await closeCustomerTabAction({ tabId, force });
     setIsLoading(false);
 
     if (res.success) {
@@ -477,6 +494,30 @@ export function BarManager({
       }
 
       setSettlingTab(null);
+      setUnservedWarningTab(null);
+    } else {
+      if (res.error?.includes('unserved kitchen orders')) {
+        const tabObj = tabs.find((t) => t.id === tabId);
+        if (tabObj) {
+          setUnservedWarningTab({ tab: tabObj, message: res.error });
+        }
+      } else {
+        setFeedback({ type: 'error', message: res.error });
+      }
+    }
+  };
+
+  // Phase 2: Explicit Table Release
+  const handleReleaseTable = async (tableId: string) => {
+    setIsLoading(true);
+    setFeedback(null);
+
+    const res = await releaseBarTableAction({ tableId });
+    setIsLoading(false);
+
+    if (res.success) {
+      setFeedback({ type: 'success', message: res.message || 'Table released successfully.' });
+      setTables(tables.map((t) => (t.id === tableId ? { ...t, status: 'AVAILABLE' } : t)));
     } else {
       setFeedback({ type: 'error', message: res.error });
     }
@@ -554,6 +595,17 @@ export function BarManager({
   // Open tabs
   const openTabsList = tabs.filter((t) => t.status === 'OPEN');
 
+  // Phase 2: Operational visibility metrics
+  const occupiedTablesCount = tables.filter((t) => t.status === 'OCCUPIED').length;
+  const kitchenQueueCount = orders.filter((o) => ['PENDING', 'PREPARING'].includes(o.kitchen_status)).length;
+  const totalOutstandingTabs = openTabsList.reduce((sum, tab) => {
+    const tabBal =
+      tab.bar_orders
+        ?.filter((o) => o.order_status !== 'CANCELLED')
+        .reduce((s, o) => s + Number(o.total_amount), 0) ?? 0;
+    return sum + tabBal;
+  }, 0);
+
   // KDS Orders filtered into stages
   const pendingKds = orders.filter((o) => o.kitchen_status === 'PENDING');
   const preparingKds = orders.filter((o) => o.kitchen_status === 'PREPARING');
@@ -612,6 +664,49 @@ export function BarManager({
           </button>
         </div>
       )}
+
+      {/* Operational Highlights Strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card className="border-zinc-800 bg-zinc-900/60 p-3.5">
+          <div className="text-zinc-400 text-xs font-medium flex items-center justify-between">
+            <span>Floor Seating</span>
+            <Users className="h-3.5 w-3.5 text-zinc-400" />
+          </div>
+          <div className="text-2xl font-bold text-white mt-1">
+            {occupiedTablesCount} <span className="text-xs text-zinc-500 font-normal">/ {tables.length} tables</span>
+          </div>
+          <div className="text-[11px] text-amber-500/80 mt-0.5">{tables.filter((t) => t.status === 'AVAILABLE').length} tables available</div>
+        </Card>
+
+        <Card className={`border-zinc-800 p-3.5 transition-all ${
+          kitchenQueueCount > 0 ? 'bg-amber-950/20 border-amber-900/50' : 'bg-zinc-900/60'
+        }`}>
+          <div className="text-zinc-400 text-xs font-medium flex items-center justify-between">
+            <span>Kitchen Queue</span>
+            <ChefHat className="h-3.5 w-3.5 text-amber-400" />
+          </div>
+          <div className="text-2xl font-bold text-amber-400 mt-1">{kitchenQueueCount}</div>
+          <div className="text-[11px] text-zinc-500 mt-0.5">Tickets pending / in prep</div>
+        </Card>
+
+        <Card className="border-zinc-800 bg-zinc-900/60 p-3.5">
+          <div className="text-zinc-400 text-xs font-medium flex items-center justify-between">
+            <span>Open Customer Tabs</span>
+            <CreditCard className="h-3.5 w-3.5 text-emerald-400" />
+          </div>
+          <div className="text-2xl font-bold text-emerald-400 mt-1">{openTabsList.length}</div>
+          <div className="text-[11px] text-zinc-500 mt-0.5">Running member tabs</div>
+        </Card>
+
+        <Card className="border-zinc-800 bg-zinc-900/60 p-3.5">
+          <div className="text-zinc-400 text-xs font-medium flex items-center justify-between">
+            <span>Total Tab Balance</span>
+            <Receipt className="h-3.5 w-3.5 text-zinc-400" />
+          </div>
+          <div className="text-xl font-bold text-white mt-1 truncate">{formatCurrency(totalOutstandingTabs)}</div>
+          <div className="text-[11px] text-zinc-500 mt-0.5">Unsettled on active tabs</div>
+        </Card>
+      </div>
 
       {/* View Switcher Tabs */}
       <div className="flex border-b border-zinc-800 gap-6 text-xs font-semibold">
@@ -698,77 +793,121 @@ export function BarManager({
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-4">
-                {tables.map((t) => (
-                  <div
-                    key={t.id}
-                    className={`p-3 rounded-xl border text-center space-y-2 transition-all ${
-                      t.status === 'AVAILABLE'
-                        ? 'bg-zinc-950/70 border-emerald-900/40 hover:border-emerald-600/60'
-                        : t.status === 'OCCUPIED'
-                        ? 'bg-amber-950/20 border-amber-900/50 hover:border-amber-600/60'
-                        : 'bg-zinc-950/70 border-zinc-800 hover:border-zinc-700'
-                    }`}
-                  >
-                    <div>
-                      <div className="text-base font-bold text-white tracking-wide">{t.table_number}</div>
-                      <div className="text-[11px] text-zinc-400 flex items-center justify-center gap-1">
-                        <Users className="h-3 w-3" />
-                        <span>{t.capacity} Seats</span>
+                {tables.map((t) => {
+                  const tableActiveOrders = orders.filter(
+                    (o) => o.table_id === t.id && o.order_status !== 'CANCELLED' && o.kitchen_status !== 'SERVED'
+                  );
+                  const tableOutstanding = orders
+                    .filter((o) => o.table_id === t.id && o.order_status !== 'CANCELLED')
+                    .reduce((sum, o) => sum + Number(o.total_amount), 0);
+                  const tableOpenTab = tabs.find((tab) => tab.table_id === t.id && tab.status === 'OPEN');
+
+                  return (
+                    <div
+                      key={t.id}
+                      className={`p-3 rounded-xl border text-center space-y-2 transition-all flex flex-col justify-between ${
+                        t.status === 'AVAILABLE'
+                          ? 'bg-zinc-950/70 border-emerald-900/40 hover:border-emerald-600/60'
+                          : t.status === 'OCCUPIED'
+                          ? 'bg-amber-950/20 border-amber-900/50 hover:border-amber-600/60'
+                          : 'bg-zinc-950/70 border-zinc-800 hover:border-zinc-700'
+                      }`}
+                    >
+                      <div className="space-y-1">
+                        <div className="flex justify-between items-center">
+                          <span className="text-base font-bold text-white tracking-wide">{t.table_number}</span>
+                          <span className="text-[11px] text-zinc-400 flex items-center gap-0.5">
+                            <Users className="h-3 w-3" />
+                            {t.capacity}
+                          </span>
+                        </div>
+
+                        <div>
+                          <Badge
+                            variant={
+                              t.status === 'AVAILABLE'
+                                ? 'success'
+                                : t.status === 'OCCUPIED'
+                                ? 'warning'
+                                : 'outline'
+                            }
+                            className="text-[10px]"
+                          >
+                            {t.status}
+                          </Badge>
+                        </div>
+
+                        {tableOpenTab && (
+                          <div className="text-[10px] text-emerald-400 font-mono font-medium truncate">
+                            Tab: {tableOpenTab.tab_number || 'OPEN'}
+                          </div>
+                        )}
+
+                        {tableActiveOrders.length > 0 && (
+                          <div className="text-[10px] text-amber-400 font-medium">
+                            {tableActiveOrders.length} active {tableActiveOrders.length === 1 ? 'ticket' : 'tickets'}
+                          </div>
+                        )}
+
+                        {tableOutstanding > 0 && (
+                          <div className="text-xs font-bold text-white font-mono pt-0.5">
+                            Due: {formatCurrency(tableOutstanding)}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="pt-2 border-t border-zinc-800/80 space-y-1.5">
+                        {t.status === 'OCCUPIED' && tableOutstanding === 0 && !tableOpenTab && (
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            className="w-full h-6 text-[10px] bg-emerald-600 hover:bg-emerald-500 font-semibold"
+                            onClick={() => handleReleaseTable(t.id)}
+                            isLoading={isLoading}
+                          >
+                            Free Table
+                          </Button>
+                        )}
+
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            title="Mark Available"
+                            onClick={() => handleToggleTableStatus(t, 'AVAILABLE')}
+                            className={`flex-1 py-0.5 rounded text-[10px] font-mono ${
+                              t.status === 'AVAILABLE'
+                                ? 'bg-emerald-600 text-white font-bold'
+                                : 'bg-zinc-900 text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            Free
+                          </button>
+                          <button
+                            title="Mark Occupied"
+                            onClick={() => handleToggleTableStatus(t, 'OCCUPIED')}
+                            className={`flex-1 py-0.5 rounded text-[10px] font-mono ${
+                              t.status === 'OCCUPIED'
+                                ? 'bg-amber-600 text-white font-bold'
+                                : 'bg-zinc-900 text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            Seat
+                          </button>
+                          <button
+                            title="Mark Reserved"
+                            onClick={() => handleToggleTableStatus(t, 'RESERVED')}
+                            className={`flex-1 py-0.5 rounded text-[10px] font-mono ${
+                              t.status === 'RESERVED'
+                                ? 'bg-zinc-700 text-white font-bold'
+                                : 'bg-zinc-900 text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            Resv
+                          </button>
+                        </div>
                       </div>
                     </div>
-
-                    <div>
-                      <Badge
-                        variant={
-                          t.status === 'AVAILABLE'
-                            ? 'success'
-                            : t.status === 'OCCUPIED'
-                            ? 'warning'
-                            : 'outline'
-                        }
-                        className="text-[10px]"
-                      >
-                        {t.status}
-                      </Badge>
-                    </div>
-
-                    <div className="pt-1 flex items-center justify-center gap-1 border-t border-zinc-800/80">
-                      <button
-                        title="Mark Available"
-                        onClick={() => handleToggleTableStatus(t, 'AVAILABLE')}
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${
-                          t.status === 'AVAILABLE'
-                            ? 'bg-emerald-600 text-white font-bold'
-                            : 'bg-zinc-900 text-zinc-400 hover:text-white'
-                        }`}
-                      >
-                        Free
-                      </button>
-                      <button
-                        title="Mark Occupied"
-                        onClick={() => handleToggleTableStatus(t, 'OCCUPIED')}
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${
-                          t.status === 'OCCUPIED'
-                            ? 'bg-amber-600 text-white font-bold'
-                            : 'bg-zinc-900 text-zinc-400 hover:text-white'
-                        }`}
-                      >
-                        Seat
-                      </button>
-                      <button
-                        title="Mark Reserved"
-                        onClick={() => handleToggleTableStatus(t, 'RESERVED')}
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${
-                          t.status === 'RESERVED'
-                            ? 'bg-zinc-700 text-white font-bold'
-                            : 'bg-zinc-900 text-zinc-400 hover:text-white'
-                        }`}
-                      >
-                        Resv
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </Card>
           </div>
@@ -1192,44 +1331,60 @@ export function BarManager({
               </div>
 
               <div className="space-y-3">
-                {pendingKds.map((o) => (
-                  <Card key={o.id} className="border-rose-900/40 bg-zinc-950/80 p-3 space-y-2">
-                    <div className="flex justify-between items-start">
-                      <span className="text-xs font-mono font-bold text-rose-400">{o.order_number}</span>
-                      <Badge variant="outline" className="text-[9px]">
-                        {o.bar_tables ? `Table ${o.bar_tables.table_number}` : o.customer_tabs ? `Tab ${o.customer_tabs.tab_number || ''}` : 'Counter'}
-                      </Badge>
-                    </div>
-
-                    <div className="space-y-1 pt-1 border-t border-zinc-800 text-xs font-sans">
-                      {o.bar_order_items?.map((item) => (
-                        <div key={item.id} className="flex flex-col text-zinc-200">
-                          <div className="flex justify-between font-semibold">
-                            <span>{item.menu_items?.name || 'Item'}</span>
-                            <span className="font-bold text-white text-sm">x{item.quantity}</span>
-                          </div>
-                          {item.special_instructions && (
-                            <span className="text-[10px] text-amber-400 italic">
-                              Note: {item.special_instructions}
-                            </span>
-                          )}
+                {pendingKds.map((o) => {
+                  const elapsedMins = currentTime > 0 ? Math.max(0, Math.floor((currentTime - new Date(o.created_at).getTime()) / 60000)) : 0;
+                  return (
+                    <Card key={o.id} className="border-rose-900/40 bg-zinc-950/80 p-3 space-y-2">
+                      <div className="flex justify-between items-start">
+                        <span className="text-xs font-mono font-bold text-rose-400">{o.order_number}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`text-[9px] font-mono px-1.5 py-0.5 rounded border ${
+                              elapsedMins > 20
+                                ? 'bg-rose-950/80 border-rose-600 text-rose-300 font-bold animate-pulse'
+                                : elapsedMins > 10
+                                ? 'bg-amber-950/70 border-amber-600 text-amber-300 font-medium'
+                                : 'bg-zinc-900 border-zinc-800 text-emerald-400'
+                            }`}
+                          >
+                            {elapsedMins === 0 ? 'Just now' : `${elapsedMins}m ago`}
+                          </span>
+                          <Badge variant="outline" className="text-[9px]">
+                            {o.bar_tables ? `Table ${o.bar_tables.table_number}` : o.customer_tabs ? `Tab ${o.customer_tabs.tab_number || ''}` : 'Counter'}
+                          </Badge>
                         </div>
-                      ))}
-                    </div>
+                      </div>
 
-                    <div className="pt-2 border-t border-zinc-800 flex justify-between items-center text-[10px] text-zinc-500">
-                      <span>{formatDateTime(o.created_at)}</span>
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        className="h-6 px-2 text-[10px] bg-amber-600 hover:bg-amber-700 text-white"
-                        onClick={() => handleAdvanceKitchenStatus(o.id, 'PREPARING')}
-                      >
-                        Start Preparing &rarr;
-                      </Button>
-                    </div>
-                  </Card>
-                ))}
+                      <div className="space-y-1 pt-1 border-t border-zinc-800 text-xs font-sans">
+                        {o.bar_order_items?.map((item) => (
+                          <div key={item.id} className="flex flex-col text-zinc-200">
+                            <div className="flex justify-between font-semibold">
+                              <span>{item.menu_items?.name || 'Item'}</span>
+                              <span className="font-bold text-white text-sm">x{item.quantity}</span>
+                            </div>
+                            {item.special_instructions && (
+                              <span className="text-[10px] text-amber-400 italic">
+                                Note: {item.special_instructions}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="pt-2 border-t border-zinc-800 flex justify-between items-center text-[10px] text-zinc-500">
+                        <span>{formatDateTime(o.created_at)}</span>
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          className="h-6 px-2 text-[10px] bg-amber-600 hover:bg-amber-700 text-white font-medium"
+                          onClick={() => handleAdvanceKitchenStatus(o.id, 'PREPARING')}
+                        >
+                          Start Preparing &rarr;
+                        </Button>
+                      </div>
+                    </Card>
+                  );
+                })}
                 {pendingKds.length === 0 && (
                   <div className="text-center py-10 text-zinc-600 text-xs">No pending orders.</div>
                 )}
@@ -1247,44 +1402,60 @@ export function BarManager({
               </div>
 
               <div className="space-y-3">
-                {preparingKds.map((o) => (
-                  <Card key={o.id} className="border-amber-900/40 bg-zinc-950/80 p-3 space-y-2">
-                    <div className="flex justify-between items-start">
-                      <span className="text-xs font-mono font-bold text-amber-400">{o.order_number}</span>
-                      <Badge variant="outline" className="text-[9px]">
-                        {o.bar_tables ? `Table ${o.bar_tables.table_number}` : 'Tab/Bar'}
-                      </Badge>
-                    </div>
-
-                    <div className="space-y-1 pt-1 border-t border-zinc-800 text-xs font-sans">
-                      {o.bar_order_items?.map((item) => (
-                        <div key={item.id} className="flex flex-col text-zinc-200">
-                          <div className="flex justify-between font-semibold">
-                            <span>{item.menu_items?.name || 'Item'}</span>
-                            <span className="font-bold text-white text-sm">x{item.quantity}</span>
-                          </div>
-                          {item.special_instructions && (
-                            <span className="text-[10px] text-amber-400 italic">
-                              Note: {item.special_instructions}
-                            </span>
-                          )}
+                {preparingKds.map((o) => {
+                  const elapsedMins = currentTime > 0 ? Math.max(0, Math.floor((currentTime - new Date(o.created_at).getTime()) / 60000)) : 0;
+                  return (
+                    <Card key={o.id} className="border-amber-900/40 bg-zinc-950/80 p-3 space-y-2">
+                      <div className="flex justify-between items-start">
+                        <span className="text-xs font-mono font-bold text-amber-400">{o.order_number}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`text-[9px] font-mono px-1.5 py-0.5 rounded border ${
+                              elapsedMins > 20
+                                ? 'bg-rose-950/80 border-rose-600 text-rose-300 font-bold animate-pulse'
+                                : elapsedMins > 10
+                                ? 'bg-amber-950/70 border-amber-600 text-amber-300 font-medium'
+                                : 'bg-zinc-900 border-zinc-800 text-emerald-400'
+                            }`}
+                          >
+                            {elapsedMins === 0 ? 'Just now' : `${elapsedMins}m ago`}
+                          </span>
+                          <Badge variant="outline" className="text-[9px]">
+                            {o.bar_tables ? `Table ${o.bar_tables.table_number}` : 'Tab/Bar'}
+                          </Badge>
                         </div>
-                      ))}
-                    </div>
+                      </div>
 
-                    <div className="pt-2 border-t border-zinc-800 flex justify-between items-center text-[10px] text-zinc-500">
-                      <span>{formatDateTime(o.created_at)}</span>
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        className="h-6 px-2 text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white"
-                        onClick={() => handleAdvanceKitchenStatus(o.id, 'READY')}
-                      >
-                        Mark Ready &rarr;
-                      </Button>
-                    </div>
-                  </Card>
-                ))}
+                      <div className="space-y-1 pt-1 border-t border-zinc-800 text-xs font-sans">
+                        {o.bar_order_items?.map((item) => (
+                          <div key={item.id} className="flex flex-col text-zinc-200">
+                            <div className="flex justify-between font-semibold">
+                              <span>{item.menu_items?.name || 'Item'}</span>
+                              <span className="font-bold text-white text-sm">x{item.quantity}</span>
+                            </div>
+                            {item.special_instructions && (
+                              <span className="text-[10px] text-amber-400 italic">
+                                Note: {item.special_instructions}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="pt-2 border-t border-zinc-800 flex justify-between items-center text-[10px] text-zinc-500">
+                        <span>{formatDateTime(o.created_at)}</span>
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          className="h-6 px-2 text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+                          onClick={() => handleAdvanceKitchenStatus(o.id, 'READY')}
+                        >
+                          Mark Ready &rarr;
+                        </Button>
+                      </div>
+                    </Card>
+                  );
+                })}
                 {preparingKds.length === 0 && (
                   <div className="text-center py-10 text-zinc-600 text-xs">No orders in preparation.</div>
                 )}
@@ -1302,37 +1473,53 @@ export function BarManager({
               </div>
 
               <div className="space-y-3">
-                {readyKds.map((o) => (
-                  <Card key={o.id} className="border-emerald-900/40 bg-zinc-950/80 p-3 space-y-2">
-                    <div className="flex justify-between items-start">
-                      <span className="text-xs font-mono font-bold text-emerald-400">{o.order_number}</span>
-                      <Badge variant="outline" className="text-[9px]">
-                        {o.bar_tables ? `Table ${o.bar_tables.table_number}` : 'Bar'}
-                      </Badge>
-                    </div>
-
-                    <div className="space-y-1 pt-1 border-t border-zinc-800 text-xs font-sans">
-                      {o.bar_order_items?.map((item) => (
-                        <div key={item.id} className="flex justify-between text-zinc-200 font-semibold">
-                          <span>{item.menu_items?.name || 'Item'}</span>
-                          <span className="font-bold text-white">x{item.quantity}</span>
+                {readyKds.map((o) => {
+                  const elapsedMins = currentTime > 0 ? Math.max(0, Math.floor((currentTime - new Date(o.created_at).getTime()) / 60000)) : 0;
+                  return (
+                    <Card key={o.id} className="border-emerald-900/40 bg-zinc-950/80 p-3 space-y-2">
+                      <div className="flex justify-between items-start">
+                        <span className="text-xs font-mono font-bold text-emerald-400">{o.order_number}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`text-[9px] font-mono px-1.5 py-0.5 rounded border ${
+                              elapsedMins > 20
+                                ? 'bg-rose-950/80 border-rose-600 text-rose-300 font-bold animate-pulse'
+                                : elapsedMins > 10
+                                ? 'bg-amber-950/70 border-amber-600 text-amber-300 font-medium'
+                                : 'bg-zinc-900 border-zinc-800 text-emerald-400'
+                            }`}
+                          >
+                            {elapsedMins === 0 ? 'Just now' : `${elapsedMins}m ago`}
+                          </span>
+                          <Badge variant="outline" className="text-[9px]">
+                            {o.bar_tables ? `Table ${o.bar_tables.table_number}` : 'Bar'}
+                          </Badge>
                         </div>
-                      ))}
-                    </div>
+                      </div>
 
-                    <div className="pt-2 border-t border-zinc-800 flex justify-between items-center text-[10px] text-zinc-500">
-                      <span>{formatDateTime(o.created_at)}</span>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="h-6 px-2 text-[10px]"
-                        onClick={() => handleAdvanceKitchenStatus(o.id, 'SERVED')}
-                      >
-                        Served to Table &rarr;
-                      </Button>
-                    </div>
-                  </Card>
-                ))}
+                      <div className="space-y-1 pt-1 border-t border-zinc-800 text-xs font-sans">
+                        {o.bar_order_items?.map((item) => (
+                          <div key={item.id} className="flex justify-between text-zinc-200 font-semibold">
+                            <span>{item.menu_items?.name || 'Item'}</span>
+                            <span className="font-bold text-white">x{item.quantity}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="pt-2 border-t border-zinc-800 flex justify-between items-center text-[10px] text-zinc-500">
+                        <span>{formatDateTime(o.created_at)}</span>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="h-6 px-2 text-[10px] font-medium"
+                          onClick={() => handleAdvanceKitchenStatus(o.id, 'SERVED')}
+                        >
+                          Served to Table &rarr;
+                        </Button>
+                      </div>
+                    </Card>
+                  );
+                })}
                 {readyKds.length === 0 && (
                   <div className="text-center py-10 text-zinc-600 text-xs">No orders waiting.</div>
                 )}
@@ -1629,6 +1816,66 @@ export function BarManager({
                   onClick={() => handleConfirmCloseTab(settlingTab.id)}
                 >
                   Confirm Close & Compute Final Bill
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* MODAL 3B: UNSERVED KITCHEN ORDERS WARNING */}
+      {unservedWarningTab && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+          <Card className="w-full max-w-md border-amber-900/60 bg-zinc-900 shadow-2xl">
+            <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-zinc-800">
+              <CardTitle className="text-sm font-bold text-amber-400 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-400" />
+                <span>Unserved Kitchen Orders Warning</span>
+              </CardTitle>
+              <button
+                onClick={() => setUnservedWarningTab(null)}
+                className="text-zinc-400 hover:text-white"
+              >
+                &times;
+              </button>
+            </CardHeader>
+
+            <CardContent className="space-y-4 pt-4 text-xs">
+              <div className="p-3 rounded-lg bg-amber-950/30 border border-amber-900/50 space-y-2">
+                <div className="font-semibold text-white">
+                  Tab {unservedWarningTab.tab.tab_number || ''} has active tickets in preparation!
+                </div>
+                <p className="text-zinc-300 leading-relaxed">
+                  {unservedWarningTab.message}
+                </p>
+                <p className="text-[11px] text-amber-400/90 font-medium">
+                  Would you like to return to the Kitchen Display (KDS) to mark the items served, or force-settle the tab anyway?
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setUnservedWarningTab(null);
+                    setSettlingTab(null);
+                    setActiveView('KDS');
+                  }}
+                  className="text-xs"
+                >
+                  <ChefHat className="h-3.5 w-3.5 mr-1" />
+                  <span>View KDS Tickets</span>
+                </Button>
+
+                <Button
+                  variant="danger"
+                  size="sm"
+                  isLoading={isLoading}
+                  onClick={() => handleConfirmCloseTab(unservedWarningTab.tab.id, true)}
+                  className="text-xs bg-rose-600 hover:bg-rose-500"
+                >
+                  <span>Force Settle & Close Tab</span>
                 </Button>
               </div>
             </CardContent>

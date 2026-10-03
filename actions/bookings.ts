@@ -707,7 +707,7 @@ export async function addSocialPlayParticipantAction(
 ): Promise<ActionResult<{ participantId: string }>> {
   try {
     const validated = addParticipantSchema.parse(input);
-    const user = await requireAuth();
+    await requireAuth();
     const supabase = await createClient();
 
     // Verify booking

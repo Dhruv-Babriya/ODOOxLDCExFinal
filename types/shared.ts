@@ -119,6 +119,29 @@ export const FULFILLMENT_TYPES: readonly FulfillmentType[] = [
   'DELIVERY',
 ] as const;
 
+export type FulfillmentStatus =
+  | 'PENDING'
+  | 'CONFIRMED'
+  | 'PREPARING'
+  | 'READY_FOR_PICKUP'
+  | 'OUT_FOR_DELIVERY'
+  | 'COLLECTED'
+  | 'DELIVERED'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
+export const FULFILLMENT_STATUSES: readonly FulfillmentStatus[] = [
+  'PENDING',
+  'CONFIRMED',
+  'PREPARING',
+  'READY_FOR_PICKUP',
+  'OUT_FOR_DELIVERY',
+  'COLLECTED',
+  'DELIVERED',
+  'COMPLETED',
+  'CANCELLED',
+] as const;
+
 export type InventoryTransactionType =
   | 'PURCHASE_RECEIPT'
   | 'SALE_COUNTER'

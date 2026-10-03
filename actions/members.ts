@@ -989,10 +989,10 @@ export async function getMemberPortalDataAction(): Promise<ActionResult<MemberPo
       .select(`
         id,
         order_number,
-        channel,
+        order_channel,
         total_amount,
         status,
-        payment_status,
+        fulfillment_status,
         created_at,
         shop_order_items (
           quantity,
@@ -1015,10 +1015,10 @@ export async function getMemberPortalDataAction(): Promise<ActionResult<MemberPo
     type ShopOrderQueryType = {
       id: string;
       order_number: string;
-      channel: string;
+      order_channel: string;
       total_amount: number;
       status: string;
-      payment_status: string;
+      fulfillment_status?: string;
       created_at: string;
       shop_order_items: ShopOrderItemType[] | null;
     };
@@ -1036,10 +1036,10 @@ export async function getMemberPortalDataAction(): Promise<ActionResult<MemberPo
       return {
         id: o.id,
         order_number: o.order_number,
-        channel: o.channel,
+        channel: o.order_channel || 'IN_PERSON',
         total_amount: Number(o.total_amount || 0),
-        status: o.status,
-        payment_status: o.payment_status,
+        status: o.fulfillment_status || o.status,
+        payment_status: o.status === 'COMPLETED' ? 'PAID' : o.status === 'CANCELLED' ? 'REFUNDED' : 'UNPAID',
         created_at: o.created_at,
         items_count: count,
         items_summary: summary || 'No items',

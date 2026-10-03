@@ -10,6 +10,7 @@ import {
   productToggleActiveSchema,
   productCategoryCreateSchema,
   inventoryAdjustmentSchema,
+  updateShopOrderFulfillmentStatusSchema,
   type ShopOrderCreateInput,
   type CancelShopOrderInput,
   type UpdateShopOrderStatusInput,
@@ -18,11 +19,12 @@ import {
   type ProductToggleActiveInput,
   type ProductCategoryCreateInput,
   type InventoryAdjustmentInput,
+  type UpdateShopOrderFulfillmentStatusInput,
 } from '@/lib/validations/shop';
 import { handleActionError, AppError, AuthorizationError } from '@/lib/errors';
 import { requireAuth, requirePermission } from '@/lib/auth/session';
 import { calculateShopPrice } from '@/lib/pricing';
-import type { ActionResult, OrderChannel, OrderStatus, InventoryTransactionType } from '@/types/shared';
+import type { ActionResult, OrderChannel, OrderStatus, InventoryTransactionType, FulfillmentStatus } from '@/types/shared';
 import { revalidatePath } from 'next/cache';
 
 /**
@@ -524,6 +526,281 @@ export async function adjustInventoryAction(
       success: true,
       data: { newQuantity: Number(data) },
       message: `Stock updated successfully (new level: ${data}).`,
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+/**
+ * Phase 2: Updates shop order fulfillment lifecycle with state machine validation
+ * Pickup: PENDING -> CONFIRMED -> READY_FOR_PICKUP -> COLLECTED -> COMPLETED
+ * Delivery: PENDING -> CONFIRMED -> PREPARING -> OUT_FOR_DELIVERY -> DELIVERED -> COMPLETED
+ */
+export async function updateShopOrderFulfillmentStatusAction(
+  input: UpdateShopOrderFulfillmentStatusInput
+): Promise<ActionResult<{ orderId: string; fulfillmentStatus: FulfillmentStatus; status: OrderStatus }>> {
+  try {
+    const validated = updateShopOrderFulfillmentStatusSchema.parse(input);
+    await requirePermission('shop_orders:manage');
+    const supabase = await createClient();
+
+    // 1. Fetch current order state
+    const { data: order, error: fetchErr } = await supabase
+      .from('shop_orders')
+      .select('id, fulfillment_type, fulfillment_status, status')
+      .eq('id', validated.orderId)
+      .single();
+
+    if (fetchErr || !order) {
+      throw new AppError('Shop order not found', 'NOT_FOUND', 404);
+    }
+
+    if (order.status === 'CANCELLED' || order.fulfillment_status === 'CANCELLED') {
+      throw new AppError('Cannot update status of a cancelled order.', 'BAD_REQUEST', 400);
+    }
+
+    if (order.status === 'COMPLETED' && validated.fulfillmentStatus !== 'COMPLETED') {
+      throw new AppError('Cannot revert a completed order to an earlier status.', 'BAD_REQUEST', 400);
+    }
+
+    // 2. If cancelling, route through cancel action for safe stock restoration
+    if (validated.fulfillmentStatus === 'CANCELLED') {
+      const cancelRes = await cancelShopOrderAction({
+        orderId: validated.orderId,
+        reason: validated.notes ?? 'Cancelled during fulfillment review',
+      });
+      if (!cancelRes.success) return { success: false, error: cancelRes.error };
+      return {
+        success: true,
+        data: {
+          orderId: validated.orderId,
+          fulfillmentStatus: 'CANCELLED',
+          status: 'CANCELLED',
+        },
+        message: 'Order cancelled and stock restored to inventory.',
+      };
+    }
+
+    // 3. Validate fulfillment type matches workflow step
+    if (order.fulfillment_type === 'PICKUP' && validated.fulfillmentStatus === 'OUT_FOR_DELIVERY') {
+      throw new AppError('Pickup orders cannot be set to Out for Delivery.', 'BAD_REQUEST', 400);
+    }
+    if (order.fulfillment_type === 'DELIVERY' && validated.fulfillmentStatus === 'READY_FOR_PICKUP') {
+      throw new AppError('Delivery orders cannot be set to Ready for Pickup.', 'BAD_REQUEST', 400);
+    }
+
+    // 4. Call database stored procedure update_shop_order_fulfillment
+    const { error: rpcErr } = await supabase.rpc('update_shop_order_fulfillment', {
+      p_order_id: validated.orderId,
+      p_new_fulfillment_status: validated.fulfillmentStatus,
+      p_notes: validated.notes || null,
+    });
+
+    if (rpcErr) throw rpcErr;
+
+    // Determine derived app status for return payload
+    let derivedStatus: OrderStatus = 'PENDING';
+    if (['COLLECTED', 'DELIVERED', 'COMPLETED'].includes(validated.fulfillmentStatus)) {
+      derivedStatus = 'COMPLETED';
+    } else if (['CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY'].includes(validated.fulfillmentStatus)) {
+      derivedStatus = 'PROCESSING';
+    }
+
+    revalidatePath('/dashboard/shop');
+    revalidatePath('/shop');
+
+    return {
+      success: true,
+      data: {
+        orderId: validated.orderId,
+        fulfillmentStatus: validated.fulfillmentStatus as FulfillmentStatus,
+        status: derivedStatus,
+      },
+      message: `Order progressed to ${validated.fulfillmentStatus.replace(/_/g, ' ')}.`,
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+/**
+ * Phase 2 Member Portal Integration: Retrieve shop orders for member view
+ */
+export async function getMemberShopOrdersAction(
+  targetMemberId?: string
+): Promise<ActionResult<Array<Record<string, unknown>>>> {
+  try {
+    const user = await requireAuth();
+    const supabase = await createClient();
+
+    let queryMemberId: string | null = null;
+
+    if (user.role === 'MEMBER') {
+      if (!user.memberId) {
+        return { success: true, data: [] };
+      }
+      queryMemberId = user.memberId;
+    } else {
+      // Staff can query for any member
+      queryMemberId = targetMemberId || null;
+    }
+
+    let query = supabase
+      .from('shop_orders')
+      .select(`
+        id,
+        order_number,
+        order_channel,
+        fulfillment_type,
+        fulfillment_status,
+        delivery_address,
+        status,
+        subtotal,
+        discount_amount,
+        total_amount,
+        notes,
+        created_at,
+        confirmed_at,
+        ready_at,
+        completed_at,
+        shop_order_items (
+          id,
+          product_id,
+          quantity,
+          unit_price,
+          total_price,
+          products (name, sku, image_url)
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (queryMemberId) {
+      query = query.eq('member_id', queryMemberId);
+    }
+
+    const { data: orders, error } = await query;
+    if (error) throw error;
+
+    return {
+      success: true,
+      data: orders || [],
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+/**
+ * Phase 2 Member Portal Integration: Retrieve detailed order breakdown by ID
+ */
+export async function getMemberOrderDetailsAction(
+  orderId: string
+): Promise<ActionResult<Record<string, unknown>>> {
+  try {
+    const user = await requireAuth();
+    const supabase = await createClient();
+
+    const { data: order, error } = await supabase
+      .from('shop_orders')
+      .select(`
+        id,
+        order_number,
+        member_id,
+        order_channel,
+        fulfillment_type,
+        fulfillment_status,
+        delivery_address,
+        customer_name,
+        customer_phone,
+        status,
+        subtotal,
+        discount_amount,
+        total_amount,
+        notes,
+        created_at,
+        confirmed_at,
+        ready_at,
+        completed_at,
+        shop_order_items (
+          id,
+          product_id,
+          quantity,
+          unit_price,
+          total_price,
+          products (name, sku, price)
+        )
+      `)
+      .eq('id', orderId)
+      .single();
+
+    if (error || !order) {
+      throw new AppError('Order not found', 'NOT_FOUND', 404);
+    }
+
+    // Verify member permissions if not staff
+    if (user.role === 'MEMBER' && order.member_id !== user.memberId) {
+      throw new AuthorizationError('You do not have access to this order.');
+    }
+
+    return {
+      success: true,
+      data: order,
+    };
+  } catch (err) {
+    return handleActionError(err);
+  }
+}
+
+/**
+ * Phase 2: Operational summary for Shop staff dashboard
+ */
+export async function getShopOperationalMetricsAction(): Promise<
+  ActionResult<{
+    pendingPickups: number;
+    pendingDeliveries: number;
+    lowStockSkus: number;
+    totalOrdersToday: number;
+  }>
+> {
+  try {
+    await requirePermission('shop:read_products');
+    const supabase = await createClient();
+
+    const [{ count: pendingPickups }, { count: pendingDeliveries }, { data: products }] = await Promise.all([
+      supabase
+        .from('shop_orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('fulfillment_type', 'PICKUP')
+        .in('fulfillment_status', ['CONFIRMED', 'READY_FOR_PICKUP']),
+      supabase
+        .from('shop_orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('fulfillment_type', 'DELIVERY')
+        .in('fulfillment_status', ['CONFIRMED', 'PREPARING', 'OUT_FOR_DELIVERY']),
+      supabase
+        .from('products')
+        .select('low_stock_threshold, inventory(quantity_on_hand)'),
+    ]);
+
+    interface ProductThresholdRecord {
+      low_stock_threshold: number;
+      inventory: { quantity_on_hand: number } | null;
+    }
+
+    const lowStockSkus = ((products as unknown as ProductThresholdRecord[]) || []).filter((p) => {
+      const qty = p.inventory?.quantity_on_hand ?? 0;
+      return qty <= p.low_stock_threshold;
+    }).length;
+
+    return {
+      success: true,
+      data: {
+        pendingPickups: pendingPickups ?? 0,
+        pendingDeliveries: pendingDeliveries ?? 0,
+        lowStockSkus,
+        totalOrdersToday: (pendingPickups ?? 0) + (pendingDeliveries ?? 0),
+      },
     };
   } catch (err) {
     return handleActionError(err);
