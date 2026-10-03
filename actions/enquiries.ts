@@ -12,6 +12,8 @@ import { requirePermission } from '@/lib/auth/session';
 import type { ActionResult } from '@/types/shared';
 import type { Database } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
+import { headers } from 'next/headers';
+import { extractClientIp, checkPublicRateLimit } from '@/lib/rate-limit';
 
 // ---------------------------------------------------------------------------
 // Public Enquiry Submission (no auth required)
@@ -27,6 +29,18 @@ export async function submitPublicEnquiryAction(
 ): Promise<ActionResult<{ enquiryId: string }>> {
   try {
     const validated = publicEnquirySchema.parse(input);
+
+    const headerList = await headers();
+    const clientIp = extractClientIp(headerList);
+    const rateCheck = checkPublicRateLimit(clientIp);
+    if (!rateCheck.success) {
+      return {
+        success: false,
+        error: rateCheck.errorMessage || 'Too many enquiry requests. Please slow down and try again later.',
+        code: 'RATE_LIMITED',
+      };
+    }
+
     const supabase = await createClient();
 
     const { data: enquiry, error } = await supabase

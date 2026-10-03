@@ -579,6 +579,28 @@ export interface MemberPortalData {
   history: MembershipHistoryItem[];
   notifications: NotificationItem[];
   availablePlans?: MembershipPlanItem[];
+  products?: PortalProduct[];
+  categories?: PortalCategory[];
 }
+
+export interface PortalProduct {
+  id: string;
+  sku: string;
+  name: string;
+  description: string | null;
+  price: number;
+  low_stock_threshold: number;
+  is_active: boolean;
+  category_id: string | null;
+  image_url?: string | null;
+  product_categories?: { name: string } | null;
+  inventory?: { quantity_on_hand: number } | null;
+}
+
+export interface PortalCategory {
+  id: string;
+  name: string;
+}
+
 
 

@@ -49,6 +49,16 @@ export class BookingConcurrencyError extends ConflictError {
   }
 }
 
+export class RateLimitError extends AppError {
+  constructor(
+    message = 'Too many requests. Please slow down and try again later.',
+    public readonly retryAfterSeconds?: number
+  ) {
+    super(message, 'RATE_LIMITED', 429, { retryAfterSeconds });
+    this.name = 'RateLimitError';
+  }
+}
+
 /**
  * Transforms any unknown error into a sanitized, safe ActionResult for server actions
  */
@@ -107,6 +117,7 @@ export function handleActionError(error: unknown): ActionResult<never> {
         'NotFoundError',
         'ConflictError',
         'BookingConcurrencyError',
+        'RateLimitError',
       ].includes((error as { name: string }).name) &&
       'message' in error);
 
