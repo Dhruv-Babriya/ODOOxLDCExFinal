@@ -10,7 +10,9 @@
     "test:phase2": "node scripts/test-phase2-bookings.mjs",
     "test:phase3": "node scripts/test-phase3-hardening.mjs",
     "test:bookings": "node scripts/test-phase2-bookings.mjs && node scripts/test-phase3-hardening.mjs",
-    "test:ratelimit": "node scripts/test-rate-limit.mjs"
+    "test:ratelimit": "node scripts/test-rate-limit.mjs",
+    "test:roles": "node scripts/test-all-roles.mjs",
+    "test:all": "node scripts/test-all-roles.mjs && npm run test:bookings"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

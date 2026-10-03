@@ -45,9 +45,9 @@ A full-stack, production-ready **Sports Club Management System** built for [ODOO
 
 ### 🏅 Membership Management
 - Multi-tier membership plans (Gold, Silver, Junior) with configurable pricing, duration, and court-hour benefits
-- Member registration, enrollment, renewal, and status management
-- Member portal with profile, booking history, and membership card
-- Paginated member directory with filters for the Owner
+- Member registration & onboarding via `/dashboard/members/new` with automatic profile provisioning and plan assignment
+- Member self-service portal (`/dashboard/portal`) with live plan status, booking history, and digital membership card
+- Paginated member directory with tier filters and status management for Managers and Owner
 
 ### 🎾 Court Booking System
 - Real-time court availability calendar with drag-to-book slots
@@ -88,8 +88,9 @@ A full-stack, production-ready **Sports Club Management System** built for [ODOO
 - Operational alerts (low stock items, expiring memberships, open tabs balance)
 
 ### 📬 CRM & Enquiries
-- Public enquiry form for prospective members
-- Trial day registration
+- Public enquiry and trial request portal (`/trial`) for prospective members with per-IP rate-limiting abuse protection
+- Real-time enquiry submission directly to database with toast feedback and immediate status assignment
+- Front desk and manager CRM roster to review, track, and contact prospective trial leads
 - Quote generation and follow-up tracking
 - Enquiry-to-member conversion workflow
 
@@ -312,11 +313,16 @@ Role assignment is stored in the `profiles.role` column and resolved via the `ge
 
 ## 🔑 Default Accounts
 
-| Role | Email | Password |
-| :--- | :--- | :--- |
-| **Owner** | `owner@gmail.com` | `owner123` |
+The platform includes pre-configured, verified user accounts representing all four primary perspectives:
 
-> New members can self-register via `/register`. Staff and managers are onboarded by the Owner through the dashboard.
+| Role | Email Address | Password | Profile Name | Default Landing Page | Primary Permissions |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Member** | `rohit.sharma@example.com` | `password123` | Rohit Sharma (Gold VIP) | `/dashboard/portal` | Self-service portal, court bookings (free/discounted), pro shop member discounts, cafeteria tabs, profile |
+| **Staff** | `staff@thechampionsclub.com` | `password123` | Club Operations Staff | `/dashboard` | Operational overview, court booking matrix & check-ins, member roster lookup, bar POS & tables, CRM enquiries |
+| **Manager** | `manager@gmail.com` | `password123` | Club General Manager | `/dashboard` | Club operations, member registration (`/dashboard/members/new`), staff shifts roster, inventory restocking, financial ledger |
+| **Owner** | `owner@gmail.com` | `password123` | Club Owner (Singhania) | `/dashboard` | Executive governance, membership plan pricing (`/dashboard/membership-plans`), club manager appointments (`/dashboard/managers`), analytics & revenue reports |
+
+> 💡 **Role Routing Note**: Members signing in are automatically routed to the self-service **Member Portal** (`/dashboard/portal`). Staff, Managers, and the Owner are routed to the **Management Dashboard Overview** (`/dashboard`). Visiting `/dashboard` as a Member automatically redirects to `/dashboard/portal`.
 
 ---
 
@@ -329,10 +335,12 @@ Role assignment is stored in the `profiles.role` column and resolved via the `ge
 | `npm run start` | Run the production build |
 | `npm run lint` | Run ESLint checks |
 | `npx tsc --noEmit` | TypeScript type checking (no output files) |
+| `npm run test:roles` | Run comprehensive 35-point Multi-Role verification test suite (Member, Staff, Manager, Owner & Public routes) |
 | `npm run test:phase2` | Run Phase 2 booking integration tests |
 | `npm run test:phase3` | Run Phase 3 hardening & concurrency tests |
 | `npm run test:bookings` | Run all booking test suites |
 | `npm run test:ratelimit` | Run rate limiting tests |
+| `npm run test:all` | Run complete test suite (Multi-Role verification + Booking concurrency tests) |
 
 ---
 
@@ -379,20 +387,28 @@ The platform implements multiple layers of security:
 
 ## 🧪 Testing
 
-The project includes comprehensive integration test suites:
+The project includes comprehensive automated test suites covering all operational layers and role-based workflows:
 
-| Test Suite | Script | Coverage |
+| Test Suite | Script / Command | Coverage & Status |
 | :--- | :--- | :--- |
+| **Multi-Role End-to-End** | `npm run test:roles`<br>*(or `node scripts/test-all-roles.mjs`)* | **35/35 Tests Passing (100%)**:<br>• **Public / Guest (10/10)**: Landing, About, Courts, Memberships, Shop, Contact, Trial form, Login, Register, Auth redirect<br>• **Member (7/7)**: Auth, Gold tier benefits (50% court off, 15% shop off), court slots, bar menu, RLS safety<br>• **Staff (7/7)**: Auth, court booking matrix, member roster lookup, bar POS tables, CRM trial leads<br>• **Manager (6/6)**: Auth, member registration route (`/dashboard/members/new`), inventory, payments, staff shifts<br>• **Owner (5/5)**: Executive governance, membership plan pricing, manager appointments, financial analytics |
 | **Phase 1** | `scripts/test-phase1-shop-bar.mjs` | Shop & bar CRUD, inventory, orders, tabs |
 | **Phase 2** | `scripts/test-phase2-bookings.mjs` | Court booking lifecycle, availability, pricing |
 | **Phase 3** | `scripts/test-phase3-hardening.mjs` | Concurrency, overlap protection, daily limits, rescheduling, cancellation, Friday social play, RLS |
-| **Rate Limiting** | `scripts/test-rate-limit.mjs` | Middleware rate limit enforcement |
+| **Rate Limiting** | `scripts/test-rate-limit.mjs` | Middleware rate limit enforcement & tier classification |
 | **Pagination** | `scripts/verify-pagination-large-datasets.mjs` | Large dataset pagination correctness |
 
-Run all booking tests:
+### Running Tests
 
 ```bash
+# Run the 35-point Multi-Role verification suite
+npm run test:roles
+
+# Run all booking concurrency & reliability tests
 npm run test:bookings
+
+# Run the complete test suite
+npm run test:all
 ```
 
 ### Pre-PR Checklist
