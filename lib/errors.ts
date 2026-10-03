@@ -50,6 +50,53 @@ export class BookingConcurrencyError extends ConflictError {
 }
 
 /**
+ * Sanitizes error messages so technical stack traces, file paths, raw SQL details,
+ * or database table references are NEVER exposed to the end user.
+ */
+export function sanitizeErrorMessage(message?: string | null): string {
+  if (!message || typeof message !== 'string') {
+    return 'An unexpected error occurred. Please try again or contact support.';
+  }
+
+  const trimmed = message.trim();
+  const lower = trimmed.toLowerCase();
+
+  // Pattern detection for internal leaks (file paths, stack traces, raw SQL / Postgres internals)
+  const isInternalLeak =
+    /[a-zA-Z]:\\|\/home\/|\/var\/|\/tmp\/|\.ts:\d+|\.tsx:\d+|\.js:\d+|node_modules/i.test(trimmed) ||
+    lower.includes('at ') ||
+    lower.includes('typeerror') ||
+    lower.includes('syntaxerror') ||
+    lower.includes('referenceerror') ||
+    lower.includes('eval at') ||
+    lower.includes('relation "') ||
+    lower.includes('column "') ||
+    lower.includes('table "') ||
+    lower.includes('violates foreign key constraint') ||
+    lower.includes('null value in column') ||
+    lower.includes('syntax error at or near') ||
+    lower.includes('postgrest') ||
+    lower.includes('duplicate key value violates') ||
+    lower.includes('auth.users') ||
+    lower.includes('public.') ||
+    lower.includes('pg_') ||
+    lower.includes('select ') ||
+    lower.includes('insert into') ||
+    lower.includes('update ') ||
+    lower.includes('delete from') ||
+    lower.includes('permission denied for table') ||
+    lower.includes('invalid input syntax') ||
+    lower.includes('jwt') ||
+    lower.includes('supabase_url');
+
+  if (isInternalLeak) {
+    return 'An unexpected error occurred while processing your request. Please try again or contact support.';
+  }
+
+  return trimmed;
+}
+
+/**
  * Transforms any unknown error into a sanitized, safe ActionResult for server actions
  */
 export function handleActionError(error: unknown): ActionResult<never> {
@@ -60,8 +107,8 @@ export function handleActionError(error: unknown): ActionResult<never> {
     }
   }
 
-  // Console log internal error details on the server
-  console.error('[Server Action Error]:', error);
+  // Console log internal error details on the server for full debugging
+  console.error('[Server Action Error Details]:', error);
 
   // 1. Zod validation error (duck-typed for cross-bundle prototype preservation)
   const isZod =
@@ -80,14 +127,14 @@ export function handleActionError(error: unknown): ActionResult<never> {
         if (!fieldErrors[path]) {
           fieldErrors[path] = [];
         }
-        fieldErrors[path].push(issue.message);
+        fieldErrors[path].push(sanitizeErrorMessage(issue.message));
       });
     }
 
     const firstMsg = Array.isArray(zodErr.issues) && zodErr.issues[0]?.message;
     return {
       success: false,
-      error: firstMsg ? `Validation failed: ${firstMsg}` : 'Validation failed. Please check your inputs.',
+      error: firstMsg ? `Validation failed: ${sanitizeErrorMessage(firstMsg)}` : 'Validation failed. Please check your inputs.',
       code: 'VALIDATION_ERROR',
       fieldErrors,
     };
@@ -114,7 +161,7 @@ export function handleActionError(error: unknown): ActionResult<never> {
     const appErr = error as { message: string; code?: string };
     return {
       success: false,
-      error: appErr.message,
+      error: sanitizeErrorMessage(appErr.message),
       code: appErr.code || 'BAD_REQUEST',
     };
   }
@@ -123,7 +170,7 @@ export function handleActionError(error: unknown): ActionResult<never> {
   if (typeof error === 'object' && error !== null && 'code' in error) {
     const pgError = error as { code: string; message?: string; details?: string; hint?: string };
 
-    // 23P01 = exclusion_violation (Exclusion constraint triggered!)
+    // 23P01 = exclusion_violation
     if (pgError.code === '23P01') {
       return {
         success: false,
@@ -173,7 +220,7 @@ export function handleActionError(error: unknown): ActionResult<never> {
     if (pgError.code === '42501') {
       return {
         success: false,
-        error: 'Database permission denied. You do not have sufficient privileges.',
+        error: 'Access denied. You do not have sufficient privileges to complete this action.',
         code: 'FORBIDDEN',
       };
     }
@@ -182,7 +229,7 @@ export function handleActionError(error: unknown): ActionResult<never> {
     if (pgError.code === 'P0001') {
       return {
         success: false,
-        error: pgError.message || 'Operation rejected by business rule.',
+        error: sanitizeErrorMessage(pgError.message || 'Operation rejected by business rule.'),
         code: 'BUSINESS_RULE_VIOLATION',
       };
     }
@@ -191,18 +238,17 @@ export function handleActionError(error: unknown): ActionResult<never> {
     if (pgError.code === 'P0002') {
       return {
         success: false,
-        error: pgError.message || 'Insufficient stock to fulfill request.',
+        error: sanitizeErrorMessage(pgError.message || 'Insufficient stock to fulfill request.'),
         code: 'INSUFFICIENT_STOCK',
       };
     }
 
-    if (pgError.message) {
-      return {
-        success: false,
-        error: pgError.message,
-        code: pgError.code || 'DATABASE_ERROR',
-      };
-    }
+    // Return sanitized message for any unhandled raw database code
+    return {
+      success: false,
+      error: 'A database operation could not be completed. Please try again or contact support.',
+      code: typeof pgError.code === 'string' ? pgError.code : 'DATABASE_ERROR',
+    };
   }
 
   // 4. Standard Error instance or object with descriptive message
@@ -211,13 +257,13 @@ export function handleActionError(error: unknown): ActionResult<never> {
     if (typeof errObj.message === 'string' && errObj.message.trim().length > 0) {
       return {
         success: false,
-        error: errObj.message,
+        error: sanitizeErrorMessage(errObj.message),
         code: typeof errObj.code === 'string' ? errObj.code : 'INTERNAL_SERVER_ERROR',
       };
     }
   }
 
-  // 5. Fallback generic error only if no meaningful message is available
+  // 5. Fallback generic error
   return {
     success: false,
     error: 'An unexpected error occurred. Please try again later.',

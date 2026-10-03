@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { loginSchema, registerSchema, type LoginInput, type RegisterInput } from '@/lib/validations/auth';
-import { handleActionError } from '@/lib/errors';
+import { handleActionError, sanitizeErrorMessage } from '@/lib/errors';
 import type { ActionResult } from '@/types/shared';
 import { revalidatePath } from 'next/cache';
 
@@ -125,7 +125,7 @@ export async function signUpAction(input: RegisterInput): Promise<ActionResult<{
         if (directError) {
           return {
             success: false,
-            error: directError.message,
+            error: sanitizeErrorMessage(directError.message),
             code: 'REGISTRATION_FAILED',
           };
         }
@@ -139,7 +139,7 @@ export async function signUpAction(input: RegisterInput): Promise<ActionResult<{
 
       return {
         success: false,
-        error: error.message,
+        error: sanitizeErrorMessage(error.message),
         code: 'REGISTRATION_FAILED',
       };
     }

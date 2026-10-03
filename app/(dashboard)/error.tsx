@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ShieldAlert, RefreshCw, Home } from 'lucide-react';
+import { sanitizeErrorMessage } from '@/lib/errors';
 
 export default function DashboardError({
   error,
@@ -14,8 +15,11 @@ export default function DashboardError({
   reset: () => void;
 }) {
   useEffect(() => {
+    // Log full error stack details server/client console for debugging
     console.error('[Dashboard Error Boundary Caught]:', error);
   }, [error]);
+
+  const safeMessage = sanitizeErrorMessage(error?.message);
 
   return (
     <div className="flex items-center justify-center min-h-[60vh] p-4">
@@ -25,15 +29,15 @@ export default function DashboardError({
             <ShieldAlert className="h-8 w-8" />
           </div>
           <CardTitle className="text-xl font-bold text-white tracking-tight">
-            Dashboard System Error
+            System Operational Warning
           </CardTitle>
           <CardDescription className="text-xs text-zinc-400">
             A temporary issue prevented this dashboard view from rendering.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 pt-1">
-          <div className="p-3 rounded-lg bg-zinc-950/60 border border-zinc-800 text-xs text-zinc-400 text-left font-mono">
-            {error.message || 'An unexpected error occurred.'}
+          <div className="p-3 rounded-lg bg-zinc-950/60 border border-zinc-800 text-xs text-zinc-300 text-left">
+            {safeMessage}
           </div>
 
           <div className="flex items-center justify-center gap-3">
@@ -41,15 +45,15 @@ export default function DashboardError({
               variant="primary"
               size="sm"
               onClick={() => reset()}
-              className="gap-2 text-xs"
+              className="gap-2 text-xs font-semibold shadow-md"
             >
               <RefreshCw className="h-3.5 w-3.5" />
-              <span>Retry</span>
+              <span>Retry Action</span>
             </Button>
-            <Link href="/dashboard/portal">
+            <Link href="/dashboard">
               <Button variant="outline" size="sm" className="gap-2 text-xs border-zinc-700">
                 <Home className="h-3.5 w-3.5" />
-                <span>Member Portal</span>
+                <span>Return to Dashboard</span>
               </Button>
             </Link>
           </div>
