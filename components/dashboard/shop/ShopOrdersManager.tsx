@@ -10,6 +10,7 @@ import {
   createShopOrderAction,
   cancelShopOrderAction,
   updateShopOrderFulfillmentStatusAction,
+  recordShopOrderPaymentAction,
 } from '@/actions/shop';
 import { FulfillmentStatus } from '@/types/shared';
 import {
@@ -27,6 +28,8 @@ import {
   AlertTriangle,
   PackageCheck,
   CheckCircle,
+  CreditCard,
+  Loader2,
 } from 'lucide-react';
 
 export interface ShopOrderProduct {
@@ -116,6 +119,31 @@ export function ShopOrdersManager({ initialOrders, products, members }: ShopOrde
 
   const [isLoading, setIsLoading] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Phase 4: Financial Payment Recording inside modal
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [payMethod, setPayMethod] = useState<'UPI' | 'CARD' | 'CASH' | 'BANK_TRANSFER'>('UPI');
+  const [payRef, setPayRef] = useState('');
+  const [isRecordingPayment, setIsRecordingPayment] = useState(false);
+
+  const handleRecordPayment = async (orderId: string, amount: number) => {
+    setIsRecordingPayment(true);
+    setFeedback(null);
+    const res = await recordShopOrderPaymentAction({
+      orderId,
+      amount,
+      paymentMethod: payMethod,
+      transactionReference: payRef.trim() || undefined,
+    });
+    setIsRecordingPayment(false);
+    if (res.success) {
+      setFeedback({ type: 'success', message: res.message || 'Payment recorded successfully.' });
+      setShowPaymentForm(false);
+      setPayRef('');
+    } else {
+      setFeedback({ type: 'error', message: res.error });
+    }
+  };
 
   // Selected member for discount preview
   const selectedMember = members.find((m) => m.id === selectedMemberId);
@@ -357,7 +385,12 @@ export function ShopOrdersManager({ initialOrders, products, members }: ShopOrde
       (o.members?.profiles?.full_name &&
         o.members.profiles.full_name.toLowerCase().includes(search.toLowerCase()));
 
-    const matchesStatus = statusFilter === 'ALL' || o.status === statusFilter;
+    const currentFulfillment = o.fulfillment_status || 'PENDING';
+    const matchesStatus =
+      statusFilter === 'ALL' ||
+      o.status === statusFilter ||
+      currentFulfillment === statusFilter;
+
     const matchesChannel = channelFilter === 'ALL' || o.order_channel === channelFilter;
 
     return matchesSearch && matchesStatus && matchesChannel;
@@ -882,12 +915,76 @@ export function ShopOrdersManager({ initialOrders, products, members }: ShopOrde
                   value={channelFilter}
                   onChange={(e) => setChannelFilter(e.target.value)}
                   className="w-full h-10 px-3 rounded-lg border border-zinc-800 bg-zinc-950/70 text-xs text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  aria-label="Filter by order channel"
                 >
                   <option value="ALL">All Channels</option>
                   <option value="COUNTER">Counter POS</option>
                   <option value="ONLINE">Online Orders</option>
                 </select>
               </div>
+            </div>
+
+            {/* Quick Status Filter Pills (Phase 4 UX) */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-zinc-800/60 text-xs">
+              <span className="text-[11px] text-zinc-400 mr-1 font-medium">Quick Filter:</span>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('ALL')}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                  statusFilter === 'ALL'
+                    ? 'bg-zinc-800 text-white shadow-sm ring-1 ring-zinc-700'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                }`}
+              >
+                All ({orders.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('READY_FOR_PICKUP')}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
+                  statusFilter === 'READY_FOR_PICKUP'
+                    ? 'bg-emerald-950 border border-emerald-700 text-emerald-200 font-bold shadow-sm'
+                    : 'text-emerald-400 hover:bg-emerald-950/40'
+                }`}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                Ready for Pickup ({orders.filter((o) => o.fulfillment_status === 'READY_FOR_PICKUP').length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('OUT_FOR_DELIVERY')}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
+                  statusFilter === 'OUT_FOR_DELIVERY'
+                    ? 'bg-amber-950 border border-amber-700 text-amber-200 font-bold shadow-sm'
+                    : 'text-amber-400 hover:bg-amber-950/40'
+                }`}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                Out for Delivery ({orders.filter((o) => o.fulfillment_status === 'OUT_FOR_DELIVERY').length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('COMPLETED')}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
+                  statusFilter === 'COMPLETED'
+                    ? 'bg-zinc-800 border border-zinc-700 text-zinc-200 font-bold shadow-sm'
+                    : 'text-zinc-400 hover:bg-zinc-800/50'
+                }`}
+              >
+                Completed ({orders.filter((o) => o.status === 'COMPLETED').length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('CANCELLED')}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
+                  statusFilter === 'CANCELLED'
+                    ? 'bg-rose-950 border border-rose-700 text-rose-200 font-bold shadow-sm'
+                    : 'text-rose-400 hover:bg-rose-950/40'
+                }`}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                Cancelled ({orders.filter((o) => o.status === 'CANCELLED').length})
+              </button>
             </div>
           </Card>
 
@@ -1475,6 +1572,72 @@ export function ShopOrdersManager({ initialOrders, products, members }: ShopOrde
                   <span className="font-mono text-emerald-400">{formatCurrency(selectedOrder.total_amount)}</span>
                 </div>
               </div>
+
+              {/* Phase 4: Financial Payment Settlement Section */}
+              {selectedOrder.status !== 'CANCELLED' && (
+                <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800/90 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-white flex items-center gap-1.5">
+                      <CreditCard className="h-3.5 w-3.5 text-emerald-400" />
+                      <span>Payment & Finance Settlement</span>
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 px-2 text-[10px] border-emerald-800/70 text-emerald-400 hover:bg-emerald-950/50"
+                      onClick={() => setShowPaymentForm(!showPaymentForm)}
+                    >
+                      {showPaymentForm ? 'Hide Form' : 'Record Payment'}
+                    </Button>
+                  </div>
+
+                  {showPaymentForm && (
+                    <div className="space-y-2 pt-2 border-t border-zinc-800 text-xs animate-in fade-in duration-200">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[11px] text-zinc-400 mb-1">Method *</label>
+                          <select
+                            value={payMethod}
+                            onChange={(e) => setPayMethod(e.target.value as 'UPI' | 'CARD' | 'CASH' | 'BANK_TRANSFER')}
+                            className="w-full h-8 px-2 rounded border border-zinc-700 bg-zinc-900 text-xs text-zinc-200"
+                          >
+                            <option value="UPI">UPI</option>
+                            <option value="CARD">Card</option>
+                            <option value="CASH">Cash</option>
+                            <option value="BANK_TRANSFER">Bank Transfer</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] text-zinc-400 mb-1">Tx Reference (Opt)</label>
+                          <Input
+                            placeholder="e.g. UPI-12345"
+                            value={payRef}
+                            onChange={(e) => setPayRef(e.target.value)}
+                            className="h-8 text-xs bg-zinc-900 border-zinc-700"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end pt-1">
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          disabled={isRecordingPayment}
+                          className="h-7 text-xs bg-emerald-600 hover:bg-emerald-500 font-bold"
+                          onClick={() => handleRecordPayment(selectedOrder.id, selectedOrder.total_amount)}
+                        >
+                          {isRecordingPayment ? (
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          ) : (
+                            <CreditCard className="h-3 w-3 mr-1" />
+                          )}
+                          <span>Confirm ₹{selectedOrder.total_amount.toFixed(2)} Payment</span>
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Actions Footer */}
               <div className="flex justify-between items-center pt-3 border-t border-zinc-800">

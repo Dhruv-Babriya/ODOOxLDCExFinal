@@ -857,6 +857,44 @@ export function BarManager({
                       </div>
 
                       <div className="pt-2 border-t border-zinc-800/80 space-y-1.5">
+                        {/* Phase 4: Quick 1-click POS Order jump from Table Card */}
+                        {t.status === 'AVAILABLE' ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full h-6 text-[10px] border-emerald-800/80 text-emerald-400 hover:bg-emerald-950/60 font-medium gap-1"
+                            onClick={() => {
+                              setOrderTargetType('TABLE');
+                              setOrderTableId(t.id);
+                              setActiveView('POS');
+                            }}
+                            aria-label={`Place new order for table ${t.table_number}`}
+                          >
+                            <Plus className="h-3 w-3" />
+                            <span>New Order</span>
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full h-6 text-[10px] border-amber-800/80 text-amber-300 hover:bg-amber-950/60 font-medium gap-1"
+                            onClick={() => {
+                              if (tableOpenTab) {
+                                setOrderTargetType('TAB');
+                                setOrderTabId(tableOpenTab.id);
+                              } else {
+                                setOrderTargetType('TABLE');
+                                setOrderTableId(t.id);
+                              }
+                              setActiveView('POS');
+                            }}
+                            aria-label={`Add items for table ${t.table_number}`}
+                          >
+                            <Plus className="h-3 w-3" />
+                            <span>Add Items</span>
+                          </Button>
+                        )}
+
                         {t.status === 'OCCUPIED' && tableOutstanding === 0 && !tableOpenTab && (
                           <Button
                             size="sm"
@@ -1333,15 +1371,22 @@ export function BarManager({
               <div className="space-y-3">
                 {pendingKds.map((o) => {
                   const elapsedMins = currentTime > 0 ? Math.max(0, Math.floor((currentTime - new Date(o.created_at).getTime()) / 60000)) : 0;
+                  const isDelayed = elapsedMins > 15;
                   return (
-                    <Card key={o.id} className="border-rose-900/40 bg-zinc-950/80 p-3 space-y-2">
+                    <Card key={o.id} className={`p-3 space-y-2.5 transition-all ${isDelayed ? 'border-rose-600 bg-rose-950/30 ring-1 ring-rose-500/50' : 'border-rose-900/40 bg-zinc-950/80'}`}>
                       <div className="flex justify-between items-start">
                         <span className="text-xs font-mono font-bold text-rose-400">{o.order_number}</span>
                         <div className="flex items-center gap-1.5">
+                          {isDelayed && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-600 text-white flex items-center gap-1 animate-pulse" role="alert">
+                              <AlertTriangle className="h-3 w-3" />
+                              <span>DELAYED</span>
+                            </span>
+                          )}
                           <span
                             className={`text-[9px] font-mono px-1.5 py-0.5 rounded border ${
                               elapsedMins > 20
-                                ? 'bg-rose-950/80 border-rose-600 text-rose-300 font-bold animate-pulse'
+                                ? 'bg-rose-950/80 border-rose-600 text-rose-300 font-bold'
                                 : elapsedMins > 10
                                 ? 'bg-amber-950/70 border-amber-600 text-amber-300 font-medium'
                                 : 'bg-zinc-900 border-zinc-800 text-emerald-400'
@@ -1376,10 +1421,11 @@ export function BarManager({
                         <Button
                           size="sm"
                           variant="primary"
-                          className="h-6 px-2 text-[10px] bg-amber-600 hover:bg-amber-700 text-white font-medium"
+                          className="h-8 px-3 text-xs bg-amber-600 hover:bg-amber-500 text-white font-bold shadow-md shadow-amber-950/50"
                           onClick={() => handleAdvanceKitchenStatus(o.id, 'PREPARING')}
+                          aria-label={`Start cooking order ${o.order_number}`}
                         >
-                          Start Preparing &rarr;
+                          Start Cooking &rarr;
                         </Button>
                       </div>
                     </Card>
@@ -1405,7 +1451,7 @@ export function BarManager({
                 {preparingKds.map((o) => {
                   const elapsedMins = currentTime > 0 ? Math.max(0, Math.floor((currentTime - new Date(o.created_at).getTime()) / 60000)) : 0;
                   return (
-                    <Card key={o.id} className="border-amber-900/40 bg-zinc-950/80 p-3 space-y-2">
+                    <Card key={o.id} className="border-amber-900/40 bg-zinc-950/80 p-3 space-y-2.5">
                       <div className="flex justify-between items-start">
                         <span className="text-xs font-mono font-bold text-amber-400">{o.order_number}</span>
                         <div className="flex items-center gap-1.5">
@@ -1447,8 +1493,9 @@ export function BarManager({
                         <Button
                           size="sm"
                           variant="primary"
-                          className="h-6 px-2 text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+                          className="h-8 px-3 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-md shadow-emerald-950/50"
                           onClick={() => handleAdvanceKitchenStatus(o.id, 'READY')}
+                          aria-label={`Mark order ${o.order_number} ready for server`}
                         >
                           Mark Ready &rarr;
                         </Button>
@@ -1476,7 +1523,7 @@ export function BarManager({
                 {readyKds.map((o) => {
                   const elapsedMins = currentTime > 0 ? Math.max(0, Math.floor((currentTime - new Date(o.created_at).getTime()) / 60000)) : 0;
                   return (
-                    <Card key={o.id} className="border-emerald-900/40 bg-zinc-950/80 p-3 space-y-2">
+                    <Card key={o.id} className="border-emerald-900/40 bg-zinc-950/80 p-3 space-y-2.5">
                       <div className="flex justify-between items-start">
                         <span className="text-xs font-mono font-bold text-emerald-400">{o.order_number}</span>
                         <div className="flex items-center gap-1.5">
@@ -1511,8 +1558,9 @@ export function BarManager({
                         <Button
                           size="sm"
                           variant="secondary"
-                          className="h-6 px-2 text-[10px] font-medium"
+                          className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-md shadow-blue-950/50"
                           onClick={() => handleAdvanceKitchenStatus(o.id, 'SERVED')}
+                          aria-label={`Mark order ${o.order_number} served to table`}
                         >
                           Served to Table &rarr;
                         </Button>
