@@ -145,13 +145,27 @@ export default async function ShopOrdersDashboardPage() {
       opened_at: t.opened_at,
     }));
 
+    const formattedProducts: PortalProduct[] = ((activeProducts || []) as any[]).map((p) => {
+      let qty = 0;
+      if (Array.isArray(p.inventory) && p.inventory.length > 0) {
+        qty = Number(p.inventory[0]?.quantity_on_hand ?? 0);
+      } else if (p.inventory && typeof p.inventory === 'object') {
+        qty = Number(p.inventory.quantity_on_hand ?? 0);
+      }
+      return {
+        ...p,
+        category: p.product_categories?.name || 'Athletic Gear',
+        inventory: { quantity_on_hand: qty },
+      };
+    });
+
     return (
       <DashboardModuleShell
         title="Pro Shop & Athletic Gear"
         subtitle="Exclusive member equipment, rackets, activewear & official club gear with automatic member pricing."
       >
         <MemberProShop
-          products={(activeProducts || []) as unknown as PortalProduct[]}
+          products={formattedProducts}
           categories={(categoriesList || []) as PortalCategory[]}
           member={memberRecord as React.ComponentProps<typeof MemberProShop>['member']}
           initialOrders={formattedOrders}

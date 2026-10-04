@@ -42,7 +42,15 @@ export interface Product {
   category_id: string | null;
   image_url?: string | null;
   product_categories?: { name: string } | null;
-  inventory?: { quantity_on_hand: number } | null;
+  inventory?: { quantity_on_hand: number } | { quantity_on_hand: number }[] | null;
+}
+
+function getProductStock(p: Product): number {
+  if (!p || !p.inventory) return 0;
+  if (Array.isArray(p.inventory)) {
+    return Number((p.inventory as any)[0]?.quantity_on_hand ?? 0);
+  }
+  return Number((p.inventory as any).quantity_on_hand ?? 0);
 }
 
 export interface PublicShopCatalogProps {
@@ -81,7 +89,7 @@ export function PublicShopCatalog({ initialProducts, categories }: PublicShopCat
         (p.description && p.description.toLowerCase().includes(search.toLowerCase()));
 
       const matchesCategory = selectedCategory === 'ALL' || p.category_id === selectedCategory;
-      const stock = p.inventory?.quantity_on_hand ?? 0;
+      const stock = getProductStock(p);
       const matchesStock = !inStockOnly || stock > 0;
 
       return matchesSearch && matchesCategory && matchesStock;
@@ -99,7 +107,7 @@ export function PublicShopCatalog({ initialProducts, categories }: PublicShopCat
 
   const addToCart = (product: Product, delta = 1) => {
     const existing = cart.find((i) => i.product.id === product.id);
-    const stockAvailable = product.inventory?.quantity_on_hand ?? 0;
+    const stockAvailable = getProductStock(product);
     const currentQtyInCart = existing ? existing.quantity : 0;
     const newQty = currentQtyInCart + delta;
 
@@ -297,7 +305,7 @@ export function PublicShopCatalog({ initialProducts, categories }: PublicShopCat
       {/* PRODUCT GRID */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredProducts.map((prod) => {
-          const stock = prod.inventory?.quantity_on_hand ?? 0;
+          const stock = getProductStock(prod);
           const isOutOfStock = stock <= 0;
           const isLowStock = stock > 0 && stock <= prod.low_stock_threshold;
           const qtyInCart = getItemQuantity(prod.id);

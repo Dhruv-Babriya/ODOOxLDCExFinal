@@ -35,6 +35,19 @@ export default async function ShopPage() {
       .order('name'),
   ]);
 
+  const formattedProducts = ((products || []) as any[]).map((p) => {
+    let qty = 0;
+    if (Array.isArray(p.inventory) && p.inventory.length > 0) {
+      qty = Number(p.inventory[0]?.quantity_on_hand ?? 0);
+    } else if (p.inventory && typeof p.inventory === 'object') {
+      qty = Number(p.inventory.quantity_on_hand ?? 0);
+    }
+    return {
+      ...p,
+      inventory: { quantity_on_hand: qty },
+    };
+  });
+
   return (
     <div className="min-h-screen bg-zinc-950 pb-20 space-y-12">
       {/* SHOP HERO HEADER */}
@@ -75,7 +88,7 @@ export default async function ShopPage() {
       {/* MAIN CATALOG CONTAINER */}
       <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <PublicShopCatalog
-          initialProducts={(products || []) as unknown as React.ComponentProps<typeof PublicShopCatalog>['initialProducts']}
+          initialProducts={formattedProducts as unknown as React.ComponentProps<typeof PublicShopCatalog>['initialProducts']}
           categories={categories || []}
         />
       </main>

@@ -85,6 +85,14 @@ export interface MemberProShopProps {
   isStandalonePage?: boolean;
 }
 
+function getProductStock(p: PortalProduct): number {
+  if (!p || !p.inventory) return 0;
+  if (Array.isArray(p.inventory)) {
+    return Number((p.inventory as any)[0]?.quantity_on_hand ?? 0);
+  }
+  return Number((p.inventory as any).quantity_on_hand ?? 0);
+}
+
 export function MemberProShop({
   products = [],
   categories = [],
@@ -161,7 +169,7 @@ export function MemberProShop({
   };
 
   const addToCart = (product: PortalProduct, delta = 1) => {
-    const stockAvailable = product.inventory?.quantity_on_hand ?? 99;
+    const stockAvailable = getProductStock(product);
     const existing = cart.find((i) => i.product.id === product.id);
     const currentQtyInCart = existing ? existing.quantity : 0;
     const newQty = currentQtyInCart + delta;
@@ -208,7 +216,7 @@ export function MemberProShop({
           (p.description && p.description.toLowerCase().includes(search.toLowerCase()));
 
         const matchesCategory = selectedCategory === 'ALL' || p.category_id === selectedCategory;
-        const stock = p.inventory?.quantity_on_hand ?? 0;
+        const stock = getProductStock(p);
         const matchesStock = !inStockOnly || stock > 0;
 
         return matchesSearch && matchesCategory && matchesStock;
@@ -224,7 +232,7 @@ export function MemberProShop({
   // Featured Spotlight Products (e.g. top 3 in-stock items with highest value)
   const spotlightProducts = useMemo(() => {
     return products
-      .filter((p) => (p.inventory?.quantity_on_hand ?? 0) > 0)
+      .filter((p) => getProductStock(p) > 0)
       .slice(0, 3);
   }, [products]);
 
@@ -649,7 +657,7 @@ export function MemberProShop({
           {/* Product Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredProducts.map((prod) => {
-              const stock = prod.inventory?.quantity_on_hand ?? 0;
+              const stock = getProductStock(prod);
               const isOutOfStock = stock <= 0;
               const isLowStock = stock > 0 && stock <= prod.low_stock_threshold;
               const qtyInCart = getItemQuantity(prod.id);
