@@ -515,13 +515,21 @@ export function MemberProShop({
                           <img
                             src={p.image_url}
                             alt={p.name}
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              const fb = e.currentTarget.parentElement?.querySelector('.shop-item-fallback');
+                              if (fb) (fb as HTMLElement).style.display = 'flex';
+                            }}
                             className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-300"
+                            loading="lazy"
                           />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-zinc-600">
-                            <ShoppingBag className="h-6 w-6" />
-                          </div>
-                        )}
+                        ) : null}
+                        <div
+                          className="shop-item-fallback flex h-full w-full items-center justify-center text-zinc-600"
+                          style={{ display: p.image_url ? 'none' : 'flex' }}
+                        >
+                          <ShoppingBag className="h-6 w-6" />
+                        </div>
                         <span className="absolute top-1 left-1 bg-emerald-500 text-[9px] font-black text-white px-1 rounded">
                           -{discountPercent}%
                         </span>
@@ -687,14 +695,22 @@ export function MemberProShop({
                         <img
                           src={prod.image_url}
                           alt={prod.name}
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const fb = e.currentTarget.parentElement?.querySelector('.prod-grid-fallback');
+                            if (fb) (fb as HTMLElement).style.display = 'flex';
+                          }}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          loading="lazy"
                         />
-                      ) : (
-                        <div className="flex flex-col items-center justify-center p-6 text-zinc-600">
-                          <ShoppingBag className="h-12 w-12 stroke-[1.5]" />
-                          <span className="text-[11px] mt-2 font-medium">Champions Gear</span>
-                        </div>
-                      )}
+                      ) : null}
+                      <div
+                        className="prod-grid-fallback flex flex-col items-center justify-center p-6 text-zinc-600"
+                        style={{ display: prod.image_url ? 'none' : 'flex' }}
+                      >
+                        <ShoppingBag className="h-12 w-12 stroke-[1.5]" />
+                        <span className="text-[11px] mt-2 font-medium">Champions Gear</span>
+                      </div>
 
                       {/* Member Discount Pill Overlay */}
                       <div className="absolute top-2.5 left-2.5 bg-emerald-500/95 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-lg backdrop-blur-md flex items-center gap-1">
@@ -1112,13 +1128,21 @@ export function MemberProShop({
                               <img
                                 src={product.image_url}
                                 alt={product.name}
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                  const fb = e.currentTarget.parentElement?.querySelector('.cart-item-fallback');
+                                  if (fb) (fb as HTMLElement).style.display = 'flex';
+                                }}
                                 className="h-full w-full object-cover"
+                                loading="lazy"
                               />
-                            ) : (
-                              <div className="h-full w-full flex items-center justify-center text-zinc-600">
-                                <ShoppingBag className="h-4 w-4" />
-                              </div>
-                            )}
+                            ) : null}
+                            <div
+                              className="cart-item-fallback h-full w-full flex items-center justify-center text-zinc-600"
+                              style={{ display: product.image_url ? 'none' : 'flex' }}
+                            >
+                              <ShoppingBag className="h-4 w-4" />
+                            </div>
                           </div>
                           <div className="min-w-0 space-y-0.5">
                             <h4 className="font-bold text-white truncate">{product.name}</h4>

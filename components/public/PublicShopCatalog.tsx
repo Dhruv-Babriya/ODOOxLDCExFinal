@@ -332,7 +332,9 @@ export function PublicShopCatalog({ initialProducts, categories }: PublicShopCat
                       src={prod.image_url}
                       alt={prod.name}
                       onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).src =
+                        const target = e.currentTarget as HTMLImageElement;
+                        target.onerror = null;
+                        target.src =
                           'https://images.unsplash.com/photo-1517649763962-0c623266ddc0?auto=format&fit=crop&w=800&q=80';
                       }}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
@@ -575,6 +577,12 @@ export function PublicShopCatalog({ initialProducts, categories }: PublicShopCat
                               <img
                                 src={item.product.image_url}
                                 alt={item.product.name}
+                                onError={(e) => {
+                                  const target = e.currentTarget as HTMLImageElement;
+                                  target.onerror = null;
+                                  target.src =
+                                    'https://images.unsplash.com/photo-1517649763962-0c623266ddc0?auto=format&fit=crop&w=800&q=80';
+                                }}
                                 className="h-10 w-10 rounded-lg object-cover bg-zinc-900 border border-zinc-800"
                               />
                             ) : (

@@ -647,13 +647,24 @@ export function MemberBarOrderingView({
                           <img
                             src={item.image_url}
                             alt={item.name}
+                            onError={(e) => {
+                              // If image fails to load, hide broken img and display fallback icon
+                              e.currentTarget.style.display = 'none';
+                              const fallback = e.currentTarget.parentElement?.querySelector('.bar-item-fallback');
+                              if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                            }}
                             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                            loading="lazy"
                           />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-zinc-950 text-zinc-700">
-                            <Coffee className="h-12 w-12" />
-                          </div>
-                        )}
+                        ) : null}
+
+                        <div
+                          className="bar-item-fallback w-full h-full flex flex-col items-center justify-center bg-zinc-950 text-zinc-700"
+                          style={{ display: item.image_url ? 'none' : 'flex' }}
+                        >
+                          <Coffee className="h-10 w-10 text-amber-500/40" />
+                          <span className="text-[10px] text-zinc-500 font-medium mt-1">Champions Cafeteria</span>
+                        </div>
 
                         <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-transparent to-transparent opacity-80" />
 
@@ -1222,18 +1233,26 @@ export function MemberBarOrderingView({
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
-                          {line.item.image_url ? (
+                          {line.item.image_url && (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
                               src={line.item.image_url}
                               alt={line.item.name}
+                              onError={(e) => {
+                                const target = e.currentTarget as HTMLImageElement;
+                                target.style.display = 'none';
+                                const fb = target.parentElement?.querySelector('.bar-cart-fallback') as HTMLElement;
+                                if (fb) fb.style.display = 'flex';
+                              }}
                               className="h-10 w-10 rounded-lg object-cover bg-zinc-950 shrink-0"
                             />
-                          ) : (
-                            <div className="h-10 w-10 rounded-lg bg-zinc-800 flex items-center justify-center shrink-0">
-                              <Coffee className="h-5 w-5 text-zinc-500" />
-                            </div>
                           )}
+                          <div
+                            className="bar-cart-fallback h-10 w-10 rounded-lg bg-zinc-800 flex items-center justify-center shrink-0"
+                            style={{ display: line.item.image_url ? 'none' : 'flex' }}
+                          >
+                            <Coffee className="h-5 w-5 text-zinc-500" />
+                          </div>
                           <div>
                             <h4 className="text-xs font-bold text-white line-clamp-1">
                               {line.item.name}

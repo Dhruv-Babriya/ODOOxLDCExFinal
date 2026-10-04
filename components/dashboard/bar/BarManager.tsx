@@ -1180,7 +1180,15 @@ export function BarManager({
                       {item.image_url && (
                         <div className="w-full aspect-video mt-2 mb-1 rounded overflow-hidden bg-zinc-950 border border-zinc-800">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                          <img
+                            src={item.image_url}
+                            alt={item.name}
+                            onError={(e) => {
+                              (e.currentTarget.parentElement as HTMLElement).style.display = 'none';
+                            }}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
                         </div>
                       )}
                       <h4 className="text-xs font-bold text-zinc-100 mt-1 line-clamp-1">{item.name}</h4>
