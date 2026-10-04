@@ -566,8 +566,7 @@ export async function createBarOrderAction(
     // 6. Update table status to OCCUPIED if placed on table or linked via tab
     if (effectiveTableId) {
       try {
-        const adminDb = createAdminClient();
-        await adminDb
+        await supabase
           .from('bar_tables')
           .update({ status: 'OCCUPIED' })
           .eq('id', effectiveTableId);

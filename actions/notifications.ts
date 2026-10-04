@@ -132,11 +132,16 @@ export async function createNotificationAction(params: {
   link?: string;
 }): Promise<ActionResult<{ notificationId: string }>> {
   try {
-    const adminSupabase = createAdminClient();
+    let client;
+    try {
+      client = await createClient();
+    } catch {
+      client = createAdminClient();
+    }
 
     // Deduplication: prevent identical unread notifications within 5 minutes
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-    const { data: existing } = await adminSupabase
+    const { data: existing } = await client
       .from('notifications')
       .select('id')
       .eq('user_id', params.userId)
@@ -153,7 +158,7 @@ export async function createNotificationAction(params: {
       };
     }
 
-    const { data, error } = await adminSupabase
+    const { data, error } = await client
       .from('notifications')
       .insert({
         user_id: params.userId,

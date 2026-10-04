@@ -1,7 +1,6 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
 import type { Database } from '@/types/database.types';
 import {
   memberCreateSchema,
@@ -546,136 +545,25 @@ export async function renewMembershipAction(
   try {
     const user = await requireAuth();
     const validated = memberRenewalSchema.parse(input);
-    const adminSupabase = createAdminClient();
+    const supabase = await createClient();
 
-    // 1. Fetch current member and verify permissions
-    const { data: member, error: memberError } = await adminSupabase
-      .from('members')
-      .select('id, profile_id, current_plan_id, status, end_date, profiles(full_name, email)')
-      .eq('id', validated.memberId)
-      .single();
-
-    if (memberError || !member) {
-      return { success: false, error: 'Member record not found', code: 'NOT_FOUND' };
-    }
-
-    const isStaff = hasPermission(user.role, 'members:manage');
-    const isSelfRenewal = member.profile_id === user.id;
-
-    if (!isStaff && !isSelfRenewal) {
-      return {
-        success: false,
-        error: 'You do not have permission to renew this membership.',
-        code: 'FORBIDDEN',
-      };
-    }
-
-    const { data: newPlan, error: planError } = await adminSupabase
-      .from('membership_plans')
-      .select('id, name, price, duration_days, is_active')
-      .eq('id', validated.planId)
-      .single();
-
-    if (planError || !newPlan) {
-      return { success: false, error: 'Selected membership plan not found', code: 'NOT_FOUND' };
-    }
-
-    if (newPlan.is_active === false) {
-      return { success: false, error: 'Selected membership plan is no longer active', code: 'INVALID_INPUT' };
-    }
-
-    // 2. Update member plan and validity dates
-    const { error: updateError } = await adminSupabase
-      .from('members')
-      .update({
-        current_plan_id: validated.planId,
-        start_date: validated.startDate,
-        end_date: validated.endDate,
-        status: 'ACTIVE',
-      })
-      .eq('id', validated.memberId);
-
-    if (updateError) throw updateError;
-
-    // 3. Insert audit entry in membership_history
-    const isPlanChange = member.current_plan_id !== validated.planId;
-    const historyNote = validated.notes
-      ? `${isPlanChange ? 'Plan upgraded/changed' : 'Membership renewed'}: ${validated.notes}`
-      : isPlanChange
-      ? 'Membership plan changed'
-      : 'Membership renewed for another term';
-
-    await adminSupabase.from('membership_history').insert({
-      member_id: validated.memberId,
-      plan_id: validated.planId,
-      start_date: validated.startDate,
-      end_date: validated.endDate,
-      status: 'ACTIVE',
-      changed_by: user.id,
-      notes: historyNote,
-    });
-
-    // 4. Financial Integration: Create Invoice and optional Payment (Developer 4 contract)
-    const isPaid = validated.paymentMethod && validated.paymentMethod !== 'UNPAID';
-    const planPrice = Number(newPlan.price);
-    const invoiceNumber = `INV-REN-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
-
-    const profile = member.profiles as { full_name?: string | null; email?: string | null } | null;
-
-    const { data: invoice } = await adminSupabase
-      .from('invoices')
-      .insert({
-        invoice_number: invoiceNumber,
-        member_id: member.id,
-        recipient_name: profile?.full_name || 'Club Member',
-        recipient_email: profile?.email || null,
-        recipient_type: 'MEMBER',
-        subtotal: planPrice,
-        tax_amount: 0,
-        total_amount: planPrice,
-        paid_amount: isPaid ? planPrice : 0,
-        status: isPaid ? 'PAID' : 'ISSUED',
-        due_date: validated.startDate,
-        notes: `${isPlanChange ? 'Plan Upgrade' : 'Membership Renewal'} to ${newPlan.name}`,
-        created_by: user.id,
-      })
-      .select('id')
-      .maybeSingle();
-
-    if (invoice) {
-      await adminSupabase.from('invoice_items').insert({
-        invoice_id: invoice.id,
-        description: `Membership Term: ${newPlan.name} (${validated.startDate} to ${validated.endDate})`,
-        quantity: 1,
-        unit_price: planPrice,
-        total_price: planPrice,
-      });
-
-      if (isPaid && validated.paymentMethod !== 'UNPAID') {
-        const paymentNumber = `PAY-REN-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
-
-        await adminSupabase.from('payments').insert({
-          payment_number: paymentNumber,
-          amount: planPrice,
-          payment_method: validated.paymentMethod as Database['public']['Enums']['app_payment_method'],
-          status: 'COMPLETED',
-          transaction_reference: validated.paymentReference || null,
-          member_id: member.id,
-          invoice_id: invoice.id,
-          recorded_by: user.id,
-        });
+    // Call atomic SECURITY DEFINER procedure for renewal & finance
+    const { data: rpcResult, error: rpcError } = await (supabase as any).rpc(
+      'renew_membership_self',
+      {
+        p_member_id: validated.memberId,
+        p_plan_id: validated.planId,
+        p_start_date: validated.startDate,
+        p_end_date: validated.endDate,
+        p_payment_method: validated.paymentMethod || 'UNPAID',
+        p_payment_reference: validated.paymentReference || null,
+        p_notes: validated.notes || null,
       }
-    }
+    );
 
-    // 5. Notification Integration: In-app renewal confirmation
-    await adminSupabase.from('notifications').insert({
-      user_id: member.profile_id,
-      title: 'Membership Renewed Successfully',
-      message: `Your ${newPlan.name} is confirmed and active until ${validated.endDate}. Court & club perks renewed.`,
-      type: 'SUCCESS',
-      link: '/dashboard/portal',
-      is_read: false,
-    });
+    if (rpcError) {
+      throw rpcError;
+    }
 
     revalidatePath('/dashboard/portal');
     revalidatePath('/dashboard/members');
@@ -683,11 +571,14 @@ export async function renewMembershipAction(
     revalidatePath('/dashboard/invoices');
     revalidatePath('/dashboard/payments');
 
+    const invoiceNumber = rpcResult?.invoice_number;
+    const isPlanChange = rpcResult?.is_plan_change;
+
     return {
       success: true,
       data: { memberId: validated.memberId, invoiceNumber },
       message: isPlanChange
-        ? `Membership upgraded to ${newPlan.name}. Invoice #${invoiceNumber} recorded.`
+        ? `Membership upgraded to selected plan. Invoice #${invoiceNumber} recorded.`
         : `Membership renewed successfully. Invoice #${invoiceNumber} recorded.`,
     };
   } catch (err) {
@@ -698,7 +589,7 @@ export async function renewMembershipAction(
 /**
  * Server action allowing a newly registered user to self-enroll in a membership plan.
  * Connects the logged-in user profile to a new member record, issues registration invoice,
- * records initial history, and sends welcome notification.
+ * records initial history, and sends welcome notification atomically.
  */
 export async function enrollMemberSelfAction(
   input: MemberEnrollSelfInput
@@ -706,136 +597,27 @@ export async function enrollMemberSelfAction(
   try {
     const user = await requireAuth();
     const validated = memberEnrollSelfSchema.parse(input);
-    const adminSupabase = createAdminClient();
+    const supabase = await createClient();
 
-    // 1. Check if user already has a membership record
-    const { data: existingMember } = await adminSupabase
-      .from('members')
-      .select('id, membership_number, status')
-      .eq('profile_id', user.id)
-      .maybeSingle();
-
-    if (existingMember) {
-      return {
-        success: false,
-        error: `Account already has a membership (#${existingMember.membership_number}) with status ${existingMember.status}. Please use renewal instead.`,
-        code: 'CONFLICT',
-      };
-    }
-
-    // 2. Fetch plan details
-    const { data: plan, error: planError } = await adminSupabase
-      .from('membership_plans')
-      .select('id, name, price, duration_days, is_active')
-      .eq('id', validated.planId)
-      .single();
-
-    if (planError || !plan) {
-      return { success: false, error: 'Selected membership plan not found', code: 'NOT_FOUND' };
-    }
-
-    if (plan.is_active === false) {
-      return { success: false, error: 'Selected membership plan is no longer available', code: 'INVALID_INPUT' };
-    }
-
-    // 3. Compute dates and membership number
-    const today = new Date();
-    const startDate = today.toISOString().split('T')[0];
-    const end = new Date(today);
-    end.setDate(end.getDate() + plan.duration_days);
-    const endDate = end.toISOString().split('T')[0];
-    const membershipNumber = `CC-${Math.floor(100000 + Math.random() * 900000)}`;
-
-    // 4. Create member record
-    const { data: member, error: memberError } = await adminSupabase
-      .from('members')
-      .insert({
-        profile_id: user.id,
-        membership_number: membershipNumber,
-        current_plan_id: plan.id,
-        status: 'ACTIVE',
-        start_date: startDate,
-        end_date: endDate,
-        emergency_contact: validated.emergencyContact || null,
-        notes: validated.notes || 'Self-service online enrollment',
-      })
-      .select('id')
-      .single();
-
-    if (memberError || !member) {
-      throw memberError || new Error('Failed to create member record');
-    }
-
-    // 5. Record initial history
-    await adminSupabase.from('membership_history').insert({
-      member_id: member.id,
-      plan_id: plan.id,
-      start_date: startDate,
-      end_date: endDate,
-      status: 'ACTIVE',
-      changed_by: user.id,
-      notes: 'Initial self-service enrollment',
-    });
-
-    // 6. Create registration invoice and optional payment
-    const isPaid = validated.paymentMethod && validated.paymentMethod !== 'UNPAID';
-    const planPrice = Number(plan.price);
-    const invoiceNumber = `INV-ENR-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
-
-    const { data: invoice } = await adminSupabase
-      .from('invoices')
-      .insert({
-        invoice_number: invoiceNumber,
-        member_id: member.id,
-        recipient_name: user.email.split('@')[0],
-        recipient_email: user.email,
-        recipient_type: 'MEMBER',
-        subtotal: planPrice,
-        tax_amount: 0,
-        total_amount: planPrice,
-        paid_amount: isPaid ? planPrice : 0,
-        status: isPaid ? 'PAID' : 'ISSUED',
-        due_date: startDate,
-        notes: `Initial self-enrollment in ${plan.name}`,
-        created_by: user.id,
-      })
-      .select('id')
-      .maybeSingle();
-
-    if (invoice) {
-      await adminSupabase.from('invoice_items').insert({
-        invoice_id: invoice.id,
-        description: `Initial Membership: ${plan.name} (${startDate} to ${endDate})`,
-        quantity: 1,
-        unit_price: planPrice,
-        total_price: planPrice,
-      });
-
-      if (isPaid && validated.paymentMethod !== 'UNPAID') {
-        const paymentNumber = `PAY-ENR-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
-
-        await adminSupabase.from('payments').insert({
-          payment_number: paymentNumber,
-          amount: planPrice,
-          payment_method: validated.paymentMethod as Database['public']['Enums']['app_payment_method'],
-          status: 'COMPLETED',
-          transaction_reference: validated.paymentReference || null,
-          member_id: member.id,
-          invoice_id: invoice.id,
-          recorded_by: user.id,
-        });
+    // Call atomic SECURITY DEFINER procedure for self-enrollment
+    const { data: rpcResult, error: rpcError } = await (supabase as any).rpc(
+      'enroll_member_self',
+      {
+        p_user_id: user.id,
+        p_plan_id: validated.planId,
+        p_payment_method: validated.paymentMethod || 'CARD',
+        p_payment_reference: validated.paymentReference || null,
+        p_emergency_contact: validated.emergencyContact || null,
+        p_notes: validated.notes || null,
       }
+    );
+
+    if (rpcError) {
+      throw rpcError;
     }
 
-    // 7. Send Welcome Notification
-    await adminSupabase.from('notifications').insert({
-      user_id: user.id,
-      title: 'Welcome to The Champions Club!',
-      message: `Your ${plan.name} membership (#${membershipNumber}) is active until ${endDate}. Enjoy club privileges and court booking discounts!`,
-      type: 'SUCCESS',
-      link: '/dashboard/portal',
-      is_read: false,
-    });
+    const memberId = rpcResult?.member_id;
+    const membershipNumber = rpcResult?.membership_number;
 
     revalidatePath('/dashboard/portal');
     revalidatePath('/dashboard/members');
@@ -844,7 +626,7 @@ export async function enrollMemberSelfAction(
 
     return {
       success: true,
-      data: { memberId: member.id, membershipNumber },
+      data: { memberId, membershipNumber },
       message: `Welcome to The Champions Club! Membership #${membershipNumber} enrolled successfully.`,
     };
   } catch (err) {
