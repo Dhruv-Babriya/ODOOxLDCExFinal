@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { DEPARTMENTS, LEAVE_TYPES, SHIFT_STATUSES } from '@/types/shared';
+import { uuidSchema } from './common';
 
 export const staffCreateSchema = z
   .object({
-    profileId: z.string().uuid('Invalid profile ID'),
+    profileId: uuidSchema('Invalid profile ID'),
     employeeCode: z
       .string()
       .trim()
@@ -54,7 +55,7 @@ export type StaffOnboardInput = z.infer<typeof staffOnboardSchema>;
 
 export const staffShiftSchema = z
   .object({
-    staffId: z.string().uuid('Invalid staff ID'),
+    staffId: uuidSchema('Invalid staff ID'),
     shiftDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Shift date must be YYYY-MM-DD'),
     startTime: z.string().datetime('Start time must be ISO datetime'),
     endTime: z.string().datetime('End time must be ISO datetime'),
@@ -74,7 +75,7 @@ export type StaffShiftInput = z.infer<typeof staffShiftSchema>;
 
 export const leaveRequestSchema = z
   .object({
-    staffId: z.string().uuid('Invalid staff ID'),
+    staffId: uuidSchema('Invalid staff ID'),
     leaveType: z.enum(LEAVE_TYPES as [string, ...string[]]),
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Start date must be YYYY-MM-DD'),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'End date must be YYYY-MM-DD'),
@@ -90,4 +91,3 @@ export const leaveRequestSchema = z
   );
 
 export type LeaveRequestInput = z.infer<typeof leaveRequestSchema>;
-

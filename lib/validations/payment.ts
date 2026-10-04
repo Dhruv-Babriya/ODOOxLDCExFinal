@@ -1,12 +1,13 @@
 import { z } from 'zod';
+import { uuidSchema } from './common';
 
 export const paymentRecordSchema = z
   .object({
-    invoiceId: z.string().uuid('Invalid invoice ID').optional().nullable(),
-    bookingId: z.string().uuid('Invalid booking ID').optional().nullable(),
-    shopOrderId: z.string().uuid('Invalid shop order ID').optional().nullable(),
-    barOrderId: z.string().uuid('Invalid bar order ID').optional().nullable(),
-    memberId: z.string().uuid('Invalid member ID').optional().nullable(),
+    invoiceId: uuidSchema('Invalid invoice ID').optional().nullable(),
+    bookingId: uuidSchema('Invalid booking ID').optional().nullable(),
+    shopOrderId: uuidSchema('Invalid shop order ID').optional().nullable(),
+    barOrderId: uuidSchema('Invalid bar order ID').optional().nullable(),
+    memberId: uuidSchema('Invalid member ID').optional().nullable(),
     amount: z.coerce.number().positive('Payment amount must be greater than zero').max(10000000, 'Payment amount cannot exceed 10,000,000'),
     paymentMethod: z.enum(['CASH', 'CARD', 'UPI', 'BANK_TRANSFER'] as const),
     transactionReference: z.string().trim().max(100, 'Transaction reference cannot exceed 100 characters').optional().nullable(),
@@ -32,7 +33,7 @@ export const invoiceItemSchema = z
 
 export const invoiceCreateSchema = z
   .object({
-    memberId: z.string().uuid('Invalid member ID').optional().nullable(),
+    memberId: uuidSchema('Invalid member ID').optional().nullable(),
     recipientName: z.string().trim().min(2, 'Recipient name is required').max(100, 'Recipient name cannot exceed 100 characters'),
     recipientEmail: z.string().trim().max(255, 'Email cannot exceed 255 characters').email('Invalid recipient email').optional().or(z.literal('')).nullable(),
     recipientType: z.enum(['MEMBER', 'BUSINESS_CLIENT', 'WALK_IN'] as const).default('MEMBER'),
@@ -44,4 +45,3 @@ export const invoiceCreateSchema = z
   .strict();
 
 export type InvoiceCreateInput = z.infer<typeof invoiceCreateSchema>;
-

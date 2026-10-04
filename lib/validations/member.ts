@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { uuidSchema } from './common';
 
 export const membershipPlanSchema = z
   .object({
@@ -19,21 +20,21 @@ export const membershipPlanSchema = z
 export type MembershipPlanInput = z.infer<typeof membershipPlanSchema>;
 
 export const membershipPlanUpdateSchema = membershipPlanSchema.extend({
-  id: z.string().uuid('Invalid plan ID'),
+  id: uuidSchema('Invalid plan ID'),
 });
 
 export type MembershipPlanUpdateInput = z.infer<typeof membershipPlanUpdateSchema>;
 
 export const memberCreateSchema = z
   .object({
-    profileId: z.string().uuid('Invalid profile ID'),
+    profileId: uuidSchema('Invalid profile ID'),
     membershipNumber: z
       .string()
       .trim()
       .min(3, 'Membership number required')
       .max(30, 'Membership number cannot exceed 30 characters')
       .regex(/^[A-Za-z0-9_-]+$/, 'Membership number can only contain alphanumeric characters, hyphens, and underscores'),
-    currentPlanId: z.string().uuid('Invalid membership plan ID'),
+    currentPlanId: uuidSchema('Invalid membership plan ID'),
     status: z.enum(['ACTIVE', 'EXPIRED', 'SUSPENDED', 'CANCELLED', 'PENDING'] as const).default('ACTIVE'),
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Start date must be YYYY-MM-DD'),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'End date must be YYYY-MM-DD'),
@@ -65,7 +66,7 @@ export const memberRegisterSchema = z
       .min(3, 'Membership number must be at least 3 characters')
       .max(30, 'Membership number cannot exceed 30 characters')
       .regex(/^[A-Za-z0-9_-]+$/, 'Membership number can only contain alphanumeric characters, hyphens, and underscores'),
-    planId: z.string().uuid('Please select a valid membership plan'),
+    planId: uuidSchema('Please select a valid membership plan'),
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Start date must be YYYY-MM-DD'),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'End date must be YYYY-MM-DD'),
     emergencyContact: z.string().trim().max(100, 'Emergency contact cannot exceed 100 characters').optional().or(z.literal('')),
@@ -83,7 +84,7 @@ export type MemberRegisterInput = z.infer<typeof memberRegisterSchema>;
 
 export const memberUpdateSchema = z
   .object({
-    id: z.string().uuid('Member ID is required'),
+    id: uuidSchema('Member ID is required'),
     fullName: z.string().trim().min(2, 'Full name must be at least 2 characters').max(100, 'Full name cannot exceed 100 characters').optional(),
     phone: z
       .string()
@@ -102,8 +103,8 @@ export type MemberUpdateInput = z.infer<typeof memberUpdateSchema>;
 
 export const memberRenewalSchema = z
   .object({
-    memberId: z.string().uuid('Member ID is required'),
-    planId: z.string().uuid('Membership plan is required'),
+    memberId: uuidSchema('Member ID is required'),
+    planId: uuidSchema('Membership plan is required'),
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Start date must be YYYY-MM-DD'),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'End date must be YYYY-MM-DD'),
     notes: z.string().trim().max(1000, 'Notes cannot exceed 1000 characters').optional().or(z.literal('')),
@@ -120,7 +121,7 @@ export type MemberRenewalInput = z.infer<typeof memberRenewalSchema>;
 
 export const memberStatusUpdateSchema = z
   .object({
-    memberId: z.string().uuid('Member ID is required'),
+    memberId: uuidSchema('Member ID is required'),
     status: z.enum(['ACTIVE', 'EXPIRED', 'SUSPENDED', 'CANCELLED', 'PENDING'] as const),
     notes: z.string().trim().max(1000, 'Notes cannot exceed 1000 characters').optional().or(z.literal('')),
   })
@@ -130,7 +131,7 @@ export type MemberStatusUpdateInput = z.infer<typeof memberStatusUpdateSchema>;
 
 export const memberEnrollSelfSchema = z
   .object({
-    planId: z.string().uuid('Membership plan is required'),
+    planId: uuidSchema('Membership plan is required'),
     paymentMethod: z.enum(['CASH', 'CARD', 'UPI', 'UNPAID'] as const).default('CARD'),
     paymentReference: z.string().trim().max(100, 'Payment reference cannot exceed 100 characters').optional().or(z.literal('')),
     emergencyContact: z.string().trim().max(100, 'Emergency contact cannot exceed 100 characters').optional().or(z.literal('')),
@@ -139,4 +140,3 @@ export const memberEnrollSelfSchema = z
   .strict();
 
 export type MemberEnrollSelfInput = z.infer<typeof memberEnrollSelfSchema>;
-

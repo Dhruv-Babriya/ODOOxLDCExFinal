@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { TABLE_STATUSES, KITCHEN_STATUSES, ORDER_STATUSES } from '@/types/shared';
+import { uuidSchema } from './common';
 
 export const barTableSchema = z
   .object({
@@ -19,7 +20,7 @@ export type BarTableInput = z.infer<typeof barTableSchema>;
 
 export const barTableStatusUpdateSchema = z
   .object({
-    tableId: z.string().uuid('Invalid table ID'),
+    tableId: uuidSchema('Invalid table ID'),
     status: z.enum(TABLE_STATUSES as [string, ...string[]]),
   })
   .strict();
@@ -37,7 +38,7 @@ export type MenuCategoryCreateInput = z.infer<typeof menuCategoryCreateSchema>;
 
 export const menuItemSchema = z
   .object({
-    categoryId: z.string().uuid('Invalid category ID').optional().nullable(),
+    categoryId: uuidSchema('Invalid category ID').optional().nullable(),
     name: z.string().trim().min(2, 'Item name must be at least 2 characters').max(150, 'Item name cannot exceed 150 characters'),
     description: z.string().trim().max(1000, 'Description cannot exceed 1000 characters').optional().nullable(),
     price: z.coerce.number().min(0, 'Price cannot be negative').max(1000000, 'Price cannot exceed 1,000,000'),
@@ -49,8 +50,8 @@ export type MenuItemInput = z.infer<typeof menuItemSchema>;
 
 export const menuItemUpdateSchema = z
   .object({
-    id: z.string().uuid('Invalid menu item ID'),
-    categoryId: z.string().uuid('Invalid category ID').optional().nullable(),
+    id: uuidSchema('Invalid menu item ID'),
+    categoryId: uuidSchema('Invalid category ID').optional().nullable(),
     name: z.string().trim().min(2, 'Item name must be at least 2 characters').max(150, 'Item name cannot exceed 150 characters'),
     description: z.string().trim().max(1000, 'Description cannot exceed 1000 characters').optional().nullable(),
     price: z.coerce.number().min(0, 'Price cannot be negative').max(1000000, 'Price cannot exceed 1,000,000'),
@@ -62,7 +63,7 @@ export type MenuItemUpdateInput = z.infer<typeof menuItemUpdateSchema>;
 
 export const menuItemToggleAvailabilitySchema = z
   .object({
-    id: z.string().uuid('Invalid menu item ID'),
+    id: uuidSchema('Invalid menu item ID'),
     isAvailable: z.boolean(),
   })
   .strict();
@@ -71,8 +72,8 @@ export type MenuItemToggleAvailabilityInput = z.infer<typeof menuItemToggleAvail
 
 export const customerTabOpenSchema = z
   .object({
-    memberId: z.string().uuid('Invalid member ID').optional().nullable(),
-    tableId: z.string().uuid('Invalid table ID').optional().nullable(),
+    memberId: uuidSchema('Invalid member ID').optional().nullable(),
+    tableId: uuidSchema('Invalid table ID').optional().nullable(),
     tabNumber: z
       .string()
       .trim()
@@ -100,7 +101,7 @@ export type CustomerTabOpenInput = z.infer<typeof customerTabOpenSchema>;
 
 export const customerTabCloseSchema = z
   .object({
-    tabId: z.string().uuid('Invalid tab ID'),
+    tabId: uuidSchema('Invalid tab ID'),
     force: z.boolean().default(false),
   })
   .strict();
@@ -109,7 +110,7 @@ export type CustomerTabCloseInput = z.infer<typeof customerTabCloseSchema>;
 
 export const releaseBarTableSchema = z
   .object({
-    tableId: z.string().uuid('Invalid table ID'),
+    tableId: uuidSchema('Invalid table ID'),
   })
   .strict();
 
@@ -117,7 +118,7 @@ export type ReleaseBarTableInput = z.infer<typeof releaseBarTableSchema>;
 
 export const barOrderItemSchema = z
   .object({
-    menuItemId: z.string().uuid('Invalid menu item ID'),
+    menuItemId: uuidSchema('Invalid menu item ID'),
     quantity: z.coerce.number().int().min(1, 'Quantity must be at least 1').max(100, 'Quantity cannot exceed 100'),
     specialInstructions: z.string().trim().max(300, 'Special instructions cannot exceed 300 characters').optional().nullable(),
   })
@@ -127,9 +128,9 @@ export type BarOrderItemInput = z.infer<typeof barOrderItemSchema>;
 
 export const barOrderCreateSchema = z
   .object({
-    tabId: z.string().uuid('Invalid tab ID').optional().nullable(),
-    tableId: z.string().uuid('Invalid table ID').optional().nullable(),
-    memberId: z.string().uuid('Invalid member ID').optional().nullable(),
+    tabId: uuidSchema('Invalid tab ID').optional().nullable(),
+    tableId: uuidSchema('Invalid table ID').optional().nullable(),
+    memberId: uuidSchema('Invalid member ID').optional().nullable(),
     items: z.array(barOrderItemSchema).min(1, 'Order must contain at least one item').max(50, 'Order cannot exceed 50 items'),
     notes: z.string().trim().max(1000, 'Notes cannot exceed 1000 characters').optional().nullable(),
   })
@@ -148,7 +149,7 @@ export type BarOrderCreateInput = z.infer<typeof barOrderCreateSchema>;
 
 export const updateKitchenStatusSchema = z
   .object({
-    orderId: z.string().uuid('Invalid order ID'),
+    orderId: uuidSchema('Invalid order ID'),
     kitchenStatus: z.enum(KITCHEN_STATUSES as [string, ...string[]]),
   })
   .strict();
@@ -157,7 +158,7 @@ export type UpdateKitchenStatusInput = z.infer<typeof updateKitchenStatusSchema>
 
 export const updateBarOrderStatusSchema = z
   .object({
-    orderId: z.string().uuid('Invalid order ID'),
+    orderId: uuidSchema('Invalid order ID'),
     orderStatus: z.enum(ORDER_STATUSES as [string, ...string[]]),
   })
   .strict();
